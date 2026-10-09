@@ -68,7 +68,23 @@ def patch_buildconfig(path: str) -> bool:
 # Achtung: Beide Einfügeblöcke ersetzen die schließende Klammer des Zweigs, an
 # den sie angehängt werden. Sie müssen deshalb selbst mit `}` enden. Genau das
 # wurde zweimal vergessen und hat jeweils einen Syntaxfehler erzeugt.
+#
+# Der Host-Toolchain-Zweig ist host_os-abhängig (Vorbild is_fuchsia/is_wasm):
+# Das Original (Windows+WSL) setzte hart `//build/toolchain/linux:clang_$host_cpu`;
+# auf macOS muss stattdessen die native mac-Clang-Toolchain her. Linux bleibt
+# damit weiterhin unterstützt (zweiter Zweig).
 TOOLCHAIN_SELECT = '''} else if (is_horizon) {
+  if (host_os == "mac") {
+    host_toolchain = "//build/toolchain/mac:clang_$host_cpu"
+  } else {
+    host_toolchain = "//build/toolchain/linux:clang_$host_cpu"
+  }
+  set_default_toolchain("//build/toolchain/horizon")
+}'''
+
+# Die vor-macOS-Fassung dieses Blocks (nur fürs selbstheilende Upgrade einer
+# bereits gepatchten Quelle; bei einem frischen Checkout wird nie eingefügt).
+TOOLCHAIN_SELECT_OLD = '''} else if (is_horizon) {
   host_toolchain = "//build/toolchain/linux:clang_$host_cpu"
   set_default_toolchain("//build/toolchain/horizon")
 }'''
@@ -125,19 +141,36 @@ def patch_toolchain_selection(path: str) -> bool:
     with open(path, encoding="utf-8") as handle:
         text = handle.read()
 
-    if "toolchain/horizon" in text:
+    if "toolchain/horizon" not in text:
+        # Frischer Checkout: neuen host_os-abhängigen Block an die QNX-Branch
+        # anhängen.
+        anchor = 'set_default_toolchain("//build/toolchain/qnx")'
+        start = text.index(anchor)
+        close = text.index("\n}", start) + 1
+        text = text[:close] + TOOLCHAIN_SELECT + text[close + 1:]
+
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        print("    Toolchain-Auswahl ergänzt")
+        return True
+
+    if TOOLCHAIN_SELECT_OLD in text:
+        # Bereits gepatcht, aber mit der alten WSL-Version (Linux hardcodiert):
+        # selbstheilend auf die host_os-abhängige Fassung umstellen.
+        text = text.replace(TOOLCHAIN_SELECT_OLD, TOOLCHAIN_SELECT)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        print("    Toolchain-Auswahl auf host_os-Abhängigkeit umgestellt (macOS)")
+        return True
+
+    if 'host_os == "mac"' in text:
         print("    Toolchain-Auswahl schon gepatcht")
         return False
 
-    anchor = 'set_default_toolchain("//build/toolchain/qnx")'
-    start = text.index(anchor)
-    close = text.index("\n}", start) + 1
-    text = text[:close] + TOOLCHAIN_SELECT + text[close + 1:]
-
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(text)
-    print("    Toolchain-Auswahl ergänzt")
-    return True
+    # Statt des erwarteten Blocks steht etwas anderes da: nicht anfassen,
+    # damit kein Zustand erzeugt wird, den das Skript nicht mehr erklärt.
+    print("    Toolchain-Auswahl: unerwarteter Zustand, kein Eingriff")
+    return False
 
 
 def write_toolchain_files(src: str) -> None:
