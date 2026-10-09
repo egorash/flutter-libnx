@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-D="$HOME/devkitpro"
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+
+set -uo pipefail
+D="$DEVKITPRO"
+S="$SRC"
 
 echo "=== *at-Funktionen in newlib"
 grep -n "openat\|faccessat\|renameat\|AT_FDCWD" \

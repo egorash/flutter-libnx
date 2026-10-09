@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
 # Nimmt die HORIZON-Bedingung aus stdio_linux.cc wieder heraus.
 #
 # Die Datei war zunaechst zur Wiederverwendung vorgesehen, besteht aber fast
@@ -8,9 +11,9 @@
 # Nebenbefund: third_party/dart ist ein eigenes Git-Repository innerhalb des
 # Checkouts. Rueckrollen von Dart-Dateien braucht deshalb -C auf dieses
 # Verzeichnis, nicht auf den flutter-Baum.
-set -eu
+set -euo pipefail
 
-D="$HOME/engine/flutter/engine/src/flutter/third_party/dart"
+D="$SRC/flutter/third_party/dart"
 F="$D/runtime/bin/stdio_linux.cc"
 
 git -C "$D" checkout -- runtime/bin/stdio_linux.cc

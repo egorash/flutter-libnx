@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prüft, ob der Engine-Checkout die Teile enthält, die für Meilenstein 2 nötig sind.
-set -u
+set -uo pipefail
 
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 

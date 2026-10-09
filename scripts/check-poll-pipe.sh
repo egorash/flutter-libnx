@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+
+set -uo pipefail
 # Klaert, womit sich ein poll-basierter Eventhandler auf Horizon wecken laesst.
-D="$HOME/devkitpro"
+D="$DEVKITPRO"
 NM="$D/devkitA64/bin/aarch64-none-elf-nm"
 
 echo "=== Header"

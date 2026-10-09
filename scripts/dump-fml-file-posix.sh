@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src/flutter/fml"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC/flutter/fml"
 echo "=== file_posix.cc ($(wc -l < "$S/platform/posix/file_posix.cc") Zeilen)"
 cat -n "$S/platform/posix/file_posix.cc"
 echo

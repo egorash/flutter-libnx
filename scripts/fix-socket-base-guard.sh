@@ -6,7 +6,7 @@
 # Ausserdem werden die von gclient installierten Git-Hooks abgeschaltet: Sie
 # rufen vpython3 auf, das nicht im PATH steht, wodurch jedes `git checkout --`
 # im Engine-Baum still fehlschlaegt.
-set -eu
+set -euo pipefail
 
 E="$HOME/engine/flutter"
 F="$E/engine/src/flutter/third_party/dart/runtime/bin/socket_base.h"

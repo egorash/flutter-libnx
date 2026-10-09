@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC"
 echo "=== Inhalt von flutter/buildtools"
 ls -la "$S/flutter/buildtools" 2>/dev/null | head -12
 echo

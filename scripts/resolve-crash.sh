@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
 # Loest Absturzadressen aus dem Crash-Handler-Bericht gegen ui_app.elf auf.
 # Aufruf: resolve-crash.sh <Handler-Laufzeitadresse> <PC> <LR> [weitere...]
 # Der erste Wert ist der "Bezugspunkt" aus dem Bericht
 # (__libnx_exception_handler); daraus ergibt sich die NRO-Basis.
-set -eu
+set -euo pipefail
 
-ELF=/mnt/e/flutter-libnx/examples/ui_app/ui_app.elf
-TOOLS=$(dirname "$(find "$HOME/devkitpro/devkitA64/bin" -name 'aarch64-none-elf-nm' | head -1)")
+ELF=$REPO/examples/ui_app/ui_app.elf
+TOOLS=$(dirname "$(find "$DEVKITA64/bin" -name 'aarch64-none-elf-nm' | head -1)")
 NM="$TOOLS/aarch64-none-elf-nm"
 A2L="$TOOLS/aarch64-none-elf-addr2line"
 

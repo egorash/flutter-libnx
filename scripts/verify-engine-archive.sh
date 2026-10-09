@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-set -u
-OUT="$HOME/engine/flutter/engine/src/out/horizon_release_arm64"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
+set -uo pipefail
+OUT="${OUT:-$SRC/out/horizon_release_arm64}"
 A="$OUT/obj/flutter/shell/platform/embedder/libflutter_engine.a"
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
 
 echo "=== Archiv"
 ls -lh "$A" | awk '{print "  " $5 "  " $9}'
-echo "  Objektdateien darin: $("$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-ar" t "$A" | wc -l)"
+echo "  Objektdateien darin: $("$DEVKITA64/bin/aarch64-none-elf-ar" t "$A" | wc -l)"
 
 echo
 echo "=== Embedder-API im Archiv"

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Entfernt doppelte horizon-Eintraege aus io_impl_sources.gni.
-set -eu
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 
-F="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin/io_impl_sources.gni"
+# Entfernt doppelte horizon-Eintraege aus io_impl_sources.gni.
+set -euo pipefail
+
+F="$SRC/flutter/third_party/dart/runtime/bin/io_impl_sources.gni"
 
 echo "vorher:"
 grep -n "horizon" "$F" || true

@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
 # Tatsaechlich fehlende Symbole: undefinierte minus die, die in irgendeiner
 # Objektdatei desselben Ziels definiert sind.
 #
 # Die erste Fassung dieses Skripts hat nur die undefinierten gezaehlt und die
 # Zahl damit deutlich ueberschaetzt - Querverweise zwischen Objekten sind der
 # Normalfall, kein Fehlen.
-set -u
+set -uo pipefail
 
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
-OBJ="$HOME/engine/flutter/engine/src/out/horizon_release_arm64/obj/flutter/third_party/dart/runtime/vm"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
+OBJ="$SRC/out/horizon_release_arm64/obj/flutter/third_party/dart/runtime/vm"
 
 cd "$OBJ" || exit 1
 

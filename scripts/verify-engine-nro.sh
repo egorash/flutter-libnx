@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-set -u
-E="/mnt/e/flutter-libnx/examples/engine_link_test"
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
-READELF="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-readelf"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
+set -uo pipefail
+E="${E:-$REPO/examples/engine_link_test}"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
+READELF="$DEVKITA64/bin/aarch64-none-elf-readelf"
 
 echo "=== Artefakte"
-ls -lh --time-style=+%H:%M "$E"/engine_link_test.nro "$E"/engine_link_test.elf 2>/dev/null \
+ls -lh "$E"/engine_link_test.nro "$E"/engine_link_test.elf 2>/dev/null \
   | awk '{print "  " $5 "  " $6 "  " $7}'
 
 echo

@@ -2,7 +2,7 @@
 # Fasst die undefinierten Symbole des Beispiel-Links nach Bereichen zusammen.
 # Einzeln abzuarbeiten waere Zeitverschwendung - die Symbole kommen in Gruppen,
 # und jede Gruppe hat genau eine Ursache.
-set -u
+set -uo pipefail
 LOG="${1:-/tmp/link.log}"
 
 if [ ! -f "$LOG" ]; then

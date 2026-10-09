@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Bilanz des Horizon-Engine-Builds.
-set -u
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
 
-OUT="$HOME/engine/flutter/engine/src/out/horizon_release_arm64"
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
-READELF="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-readelf"
+# Bilanz des Horizon-Engine-Builds.
+set -uo pipefail
+
+OUT="${OUT:-$SRC/out/horizon_release_arm64}"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
+READELF="$DEVKITA64/bin/aarch64-none-elf-readelf"
 
 echo "=== Objektdateien gesamt"
 find "$OUT/obj" -name "*.o" | wc -l

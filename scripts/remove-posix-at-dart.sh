@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
 # Entfernt posix_at_horizon.cc aus dem Dart-Baum. Die *at-Funktionen liegen
 # jetzt im Embedder (posix_compat_horizon.cpp) und beherrschen dort echte
 # Verzeichnis-Handles. Zwei Definitionen waeren ein Linkfehler.
-set -eu
-BIN="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin"
+set -euo pipefail
+BIN="$SRC/flutter/third_party/dart/runtime/bin"
 GNI="$BIN/io_impl_sources.gni"
 
 echo "vorher:"
