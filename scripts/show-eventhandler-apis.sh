@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-R="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+R="$SRC/flutter/third_party/dart/runtime"
 echo "=== TimerUtils (bin/utils.h)"
 grep -n -A8 "class TimerUtils" "$R/bin/utils.h"
 echo

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-G="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/platform/globals.h"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+G="$SRC/flutter/third_party/dart/runtime/platform/globals.h"
 echo "=== 118-145"
 sed -n '118,145p' "$G"
 echo "=== 400-430"

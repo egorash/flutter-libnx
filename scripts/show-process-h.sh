@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
-set -u
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
 sed -n '88,145p' \
-  "$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin/process.h"
+  "$SRC/flutter/third_party/dart/runtime/bin/process.h"

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-F="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin/platform_linux.cc"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+F="$SRC/flutter/third_party/dart/runtime/bin/platform_linux.cc"
 echo "=== Zeilen 9-24 (Includes)"
 sed -n '9,24p' "$F"
 echo

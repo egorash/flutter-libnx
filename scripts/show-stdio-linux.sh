@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-F="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin/stdio_linux.cc"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+F="$SRC/flutter/third_party/dart/runtime/bin/stdio_linux.cc"
 echo "=== termios-Treffer: $(grep -c 'termios\|tcgetattr\|tcsetattr' "$F")"
 echo "=== Zeilen gesamt: $(wc -l < "$F")"
 echo

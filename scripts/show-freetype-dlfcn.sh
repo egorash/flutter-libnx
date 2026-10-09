@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-F="$HOME/engine/flutter/engine/src/flutter/third_party/skia/src/ports/SkFontHost_FreeType.cpp"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+F="$SRC/flutter/third_party/skia/src/ports/SkFontHost_FreeType.cpp"
 echo "=== Zeilen 75-135"
 sed -n '75,135p' "$F"
 echo

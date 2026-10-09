@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-R="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+R="$SRC/flutter/third_party/dart/runtime"
 for f in platform/utils.h platform/threads.h platform/synchronization.h vm/os_thread.h; do
   echo "########## $f"
   grep -n -B2 -A14 "DART_HOST_OS_LINUX\|DART_HOST_OS_ANDROID" "$R/$f" | head -30

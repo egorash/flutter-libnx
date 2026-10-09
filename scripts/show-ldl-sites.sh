@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC"
 echo "=== flutter/skia/BUILD.gn:740-755"
 sed -n '740,755p' "$S/flutter/skia/BUILD.gn"
 echo

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src/flutter/fml"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC/flutter/fml"
 echo "=== message_loop_impl.h (Schnittstelle)"
 cat -n "$S/message_loop_impl.h"
 echo

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-R="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+R="$SRC/flutter/third_party/dart/runtime/bin"
 for f in thread_linux.cc fdutils_linux.cc utils_linux.cc crypto_linux.cc \
          socket_base_linux.cc file_linux.cc; do
   echo "########## $f"

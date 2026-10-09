@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-A="$HOME/engine/flutter/engine/src/third_party/abseil-cpp/absl/base/internal"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+A="$SRC/third_party/abseil-cpp/absl/base/internal"
 
 echo "=== low_level_alloc.cc: Groesse"
 wc -l "$A/low_level_alloc.cc"
@@ -17,4 +20,4 @@ sed -n '30,50p' "$A/low_level_alloc.h"
 echo
 echo "=== wo wird ABSL_HAVE_MMAP gesetzt?"
 grep -n -B6 -A4 "define ABSL_HAVE_MMAP" \
-  "$HOME/engine/flutter/engine/src/third_party/abseil-cpp/absl/base/config.h"
+  "$SRC/third_party/abseil-cpp/absl/base/config.h"

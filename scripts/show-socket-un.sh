@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-R="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin"
-D="$HOME/devkitpro"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+
+set -uo pipefail
+R="$SRC/flutter/third_party/dart/runtime/bin"
+D="$DEVKITPRO"
 echo "=== socket_base_linux.h (vollstaendig)"
 cat "$R/socket_base_linux.h"
 echo

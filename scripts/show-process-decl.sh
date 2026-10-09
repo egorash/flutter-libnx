@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-B="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+B="$SRC/flutter/third_party/dart/runtime/bin"
 
 echo "=== process.h: statische Member und Signaturen"
 grep -n "static\|Mutex\|exit_hook\|global_exit_code\|ExitHook\|ProcessStartMode" \

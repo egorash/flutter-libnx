@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-F="$HOME/engine/flutter/engine/src/third_party/abseil-cpp/absl/base/internal/low_level_alloc.cc"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+F="$SRC/third_party/abseil-cpp/absl/base/internal/low_level_alloc.cc"
 echo "=== 25-70"
 sed -n '25,70p' "$F"
 echo

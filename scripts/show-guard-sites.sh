@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-B="$HOME/engine/flutter/engine/src/flutter/third_party/dart/runtime/bin"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+B="$SRC/flutter/third_party/dart/runtime/bin"
 
 for f in socket_base_posix.cc console_posix.cc namespace_linux.cc \
          crypto_linux.cc security_context_linux.cc; do
