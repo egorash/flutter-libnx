@@ -3677,6 +3677,53 @@ def patch_zlib(src: str) -> None:
     )
 
 
+# --- macOS-Host: Linker der mac-Toolchain -----------------------------------
+# Der gepinnte Clang des Checkouts (flutter/buildtools/mac-arm64) waehlt als
+# Linker automatisch seinen Neben-Binaer `ld64.lld`. Dessen TAPI-Parser kennt
+# den Apple-Tag `arm64e.x1-macos` nicht, der in libSystem.tbd des
+# MacOSX27.0.sdk (Xcode 27) auftaucht -> "unknown architecture" beim Linken
+# aller Host-Werkzeuge (flatc, gen_snapshot, ...). Der per CIPD gelieferte
+# XcodeDefault.xctoolchain/usr/bin/ld (Xcode 27) versteht sein eigenes SDK
+# und ersetzt ld64.lld ueber `-fuse-ld`.
+#
+# Nur auf darwin-Hosts: unter WSL/Linux wird die mac-Toolchain nicht benutzt.
+# -fuse-ld akzeptiert nur absolute Pfade (relative mit '/' verwirft clang).
+def patch_mac_toolchain_ld(src: str) -> bool:
+    if sys.platform != "darwin":
+        return False
+    path = os.path.join(src, "build", "toolchain", "mac", "BUILD.gn")
+    if not os.path.exists(path):
+        print("    mac-Toolchain-ld: build/toolchain/mac/BUILD.gn fehlt",
+              file=sys.stderr)
+        return False
+
+    ld_path = os.path.realpath(os.path.join(
+        src, "flutter", "prebuilts", "SDKs",
+        "XcodeDefault.xctoolchain", "usr", "bin", "ld"))
+    if not os.path.exists(ld_path):
+        print("    mac-Toolchain-ld: XcodeDefault.xctoolchain fehlt, kein Eingriff")
+        return False
+
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+
+    if "XcodeDefault.xctoolchain/usr/bin/ld" in text:
+        print("    mac-Toolchain-ld schon gepatcht (fuse-ld)")
+        return False
+
+    old = 'ld = "${link_prefix}${prefix}/clang++"'
+    new = 'ld = "${link_prefix}${prefix}/clang++ -fuse-ld=' + ld_path + '"'
+    count = text.count(old)
+    if count == 0:
+        print("    mac-Toolchain-ld: Muster nicht gefunden, kein Eingriff")
+        return False
+
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(old, new))
+    print(f"    mac-Toolchain-ld: -fuse-ld auf {ld_path} ({count} Stellen)")
+    return True
+
+
 def main() -> int:
     buildconfig = os.path.join(SRC, "build", "config", "BUILDCONFIG.gn")
     if not os.path.exists(buildconfig):
@@ -3698,6 +3745,9 @@ def main() -> int:
     patch_cxx_disable_modules(SRC)
     patch_werror(SRC)
     patch_cxx_std(SRC)
+
+    print("==> build/toolchain/mac/BUILD.gn (Host-Linker, nur macOS)")
+    patch_mac_toolchain_ld(SRC)
 
     print("==> flutter/third_party/dart/runtime/BUILD.gn")
     patch_dart_runtime(SRC)
