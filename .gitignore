@@ -23,3 +23,11 @@ examples/**/build/
 build-logs/
 examples/*/generated/
 examples/*/romfs/
+
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Lokale Build-/Checkout-Ausgaben des macOS-Ports
+out/
