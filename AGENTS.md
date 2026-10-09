@@ -83,13 +83,15 @@ docs/                документация (status.md, porting-notes.md, ...)
 - **depot_tools:** `~/depot_tools`.
 - **Engine checkout:** `~/engine/flutter/engine/src` (ожидание
   `build-horizon.sh`/`gn-gen-horizon.sh`; переопределяется через `SRC`).
-- **Переменные окружения** (добавляются в `~/.zshrc`):
+- **Переменные окружения** — файл `env.sh` в корне репозитория (системный
+  `~/.zshrc` не трогаем):
   ```sh
-  export DEVKITPRO=/opt/devkitpro
-  export DEVKITA64=$DEVKITPRO/devkitA64
-  export PATH="$HOME/depot_tools:$HOME/flutter-3.41.6/bin:$PATH"
+  source ./env.sh    # DEVKITPRO, DEVKITA64, DEPOT_TOOLS, FLUTTER_HOME, SRC, OUT, JOBS, PATH
   ```
-- Установщик: `scripts/setup-macos.sh` (идемпотентный).
+- **Установка окружения:** `scripts/setup-macos.sh` (brew-пакеты, depot_tools,
+  Flutter; идемпотентный).
+- **devkitPro (нужен sudo):** `sudo scripts/install-devkitpro-macos.sh`
+  (официальный `.pkg` → dkp-pacman → группа `switch-dev`).
 
 Проверка после установки:
 ```

@@ -61,22 +61,27 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 ## Этап 2. Установка окружения на macOS (`scripts/setup-macos.sh`)
 
 **Шаги**
-1. Homebrew-зависимости: `cmake ninja python3 git pkg-config bison shellcheck`
-   (проверить, что не конфликтуют с pyenv-версиями).
-2. devkitPro: скачать `devkitpro-pacman-installer.pkg` из
-   `github.com/devkitPro/pacman/releases`, `sudo installer -pkg ... -target /`,
-   затем `sudo dkp-pacman -Syu` и `sudo dkp-pacman -S --needed switch-dev`.
+1. Homebrew-зависимости: `cmake ninja python3 git pkg-config bison shellcheck
+   wget` (проверить, что не конфликтуют с pyenv-версиями).
+2. devkitPro: `sudo scripts/install-devkitpro-macos.sh` — официальный
+   `devkitpro-pacman-installer.pkg`, затем `dkp-pacman -Syu` и
+   `dkp-pacman -S --needed switch-dev`. Это macOS-замена Debian-скрипта
+   `scripts/setup-devkitpro.sh`.
 3. depot_tools: клон в `~/depot_tools` (если нет).
-4. Flutter 3.41.6: клон `-b 3.41.6` в `~/flutter-3.41.6` (если нет).
-5. Дописать в `~/.zshrc` блок env (идемпотентно, с маркерами).
+4. Flutter **3.41.6**: клон `-b 3.41.6` в `~/flutter-3.41.6` (если нет).
+5. Файл окружения `env.sh` в корне репо (не трогает `~/.zshrc`):
+   `source ./env.sh` — `DEVKITPRO`, `DEVKITA64`, `DEPOT_TOOLS`, `FLUTTER_HOME`,
+   `SRC`, `OUT`, `JOBS`, PATH (depot_tools/flutter/bison — впереди).
 6. Вывести чеклист версий: `aarch64-none-elf-gcc`, `gn`, `ninja`, `flutter`,
-   `python3`.
+   `python3`, `nxlink`.
 
-**Критерий приёмки:** на чистой macOS скрипт проходит и все проверки версий
-успешны; повторный запуск ничего не ломает.
+**Критерий приёмки:** на чистой macOS `setup-macos.sh` проходит, все проверки
+версий успешны; повторный запуск ничего не ломает; `env.sh` применяется через
+`source` без правки `~/.zshrc`.
 
-**Риски:** devkitPro `.pkg` требует `sudo`; `bison` из brew может понадобиться
-раньше системного в PATH; pyenv-`python3` может мешать `gclient`.
+**Риски:** devkitPro `.pkg` требует `sudo` (пароль вводит пользователь);
+`bison` из brew keg-only — добавляется в PATH через `env.sh`; pyenv-`python3`
+может мешать `gclient` (depot_tools впереди PATH).
 
 **Зависимости:** Этап 0.
 
@@ -207,7 +212,7 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 
 - [x] Этап 0. Форк и bootstrap
 - [x] Этап 1. Аудит скриптов
-- [ ] Этап 2. Установка окружения
+- [x] Этап 2. Установка окружения
 - [ ] Этап 3. Проверка `.sh`
 - [ ] Этап 4. Engine checkout
 - [ ] Этап 5. Сборка движка и sqlite3
