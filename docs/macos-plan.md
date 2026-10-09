@@ -114,6 +114,14 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 
 **Критерий приёмки:** checkout на нужном коммите, патчи применились без ошибок.
 
+> **Итог (выполнено):** `gclient sync -D --no-history --shallow` (~12 ГБ,
+> HTTP/1.1 через `GIT_CONFIG_*`, curl-18-флапы у swiftshader/perfetto —
+> авто-retry). HEAD = `db50e2016` (3.41.6). `patch-engine-horizon.py`
+> отработал, повторный прогон — «schon gepatcht», 0 новых include
+> (идемпотентность). `gn` — `flutter/third_party/gn/gn` (2285);
+> `ninja` — нет в `third_party/ninja/`, фолбэк на host-`ninja` (brew 1.13.0)
+> в `build-horizon.sh` уже заложен.
+
 **Риски:** ~26 GB загрузки, длительное время, pyenv/python для `gclient`.
 
 **Зависимости:** Этап 2 (depot_tools, devkitPro, Flutter).
@@ -214,7 +222,7 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 - [x] Этап 1. Аудит скриптов
 - [x] Этап 2. Установка окружения
 - [x] Этап 3. Проверка `.sh`
-- [ ] Этап 4. Engine checkout
+- [x] Этап 4. Engine checkout
 - [ ] Этап 5. Сборка движка и sqlite3
 - [ ] Этап 6. Порт PS → bash
 - [ ] Этап 7. Сборка до `.nro`

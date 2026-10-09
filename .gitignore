@@ -31,3 +31,4 @@ examples/*/romfs/
 
 # Lokale Build-/Checkout-Ausgaben des macOS-Ports
 out/
+__pycache__/ 
