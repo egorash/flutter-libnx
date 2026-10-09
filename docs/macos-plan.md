@@ -213,7 +213,7 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 - [x] Этап 0. Форк и bootstrap
 - [x] Этап 1. Аудит скриптов
 - [x] Этап 2. Установка окружения
-- [ ] Этап 3. Проверка `.sh`
+- [x] Этап 3. Проверка `.sh`
 - [ ] Этап 4. Engine checkout
 - [ ] Этап 5. Сборка движка и sqlite3
 - [ ] Этап 6. Порт PS → bash
