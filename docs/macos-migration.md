@@ -8,6 +8,14 @@
 **Режим:** только анализ. Правки кода — на этапах 3 и 6 (см.
 `docs/macos-plan.md`).
 
+> **Статус Этапа 3 (выполнен, коммиты `fix(macos):` 2cc92a6..9e006c1):**
+> все `.sh` параметризованы (`REPO/SRC/OUT/DEVKITPRO/DEVKITA64` с дефолтами),
+> `/mnt/e/...` → `$REPO`, `$HOME/devkitpro` → `/opt/devkitpro`, GNU-флаги →
+> BSD (`stat -f%z`, без `ls --time-style`, кавычки `--include='*.…'`),
+> `set -uo/-euo pipefail`, macOS-guard'ы в `setup-devkitpro.sh`/
+> `extract-{make,pkgconf}.sh`. `bash -n` и `shellcheck -S error` — чисто.
+> Пункты 1–5 и 7 раздела «Рекомендации» ниже закрыты; пункт 6 — Этап 6.
+
 ## Как читать таблицы
 
 - **Зависимости** — внешние утилиты, инструменты devkitPro и переменные
