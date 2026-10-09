@@ -6,13 +6,13 @@
 # dafuer ohnehin schon nach ~/devkitpro entpackt.
 #
 #   build-example-wsl.sh engine_link_test
-set -eu
+set -euo pipefail
 
 EXAMPLE="${1:-engine_link_test}"
 shift || true   # der Rest geht an make weiter, der Name nicht
-REPO="${REPO:-/mnt/e/flutter-libnx}"
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
-export DEVKITPRO="${DEVKITPRO:-$HOME/devkitpro}"
+export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 export DEVKITA64="$DEVKITPRO/devkitA64"
 # ~/bin enthaelt die ohne root beschafften Werkzeuge (make, pkg-config).
 export PATH="$HOME/bin:$DEVKITPRO/tools/bin:$DEVKITA64/bin:$PATH"

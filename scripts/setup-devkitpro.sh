@@ -7,6 +7,12 @@ if [ "$(id -u)" -eq 0 ]; then
   echo "Bitte nicht als root starten – das Skript ruft sudo selbst auf." >&2
   exit 1
 fi
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo "setup-devkitpro.sh targets Debian/Ubuntu (WSL2). On macOS run:" >&2
+  echo "  sudo scripts/install-devkitpro-macos.sh" >&2
+  exit 1
+fi
+
 
 echo "==> Abhängigkeiten"
 sudo apt-get update

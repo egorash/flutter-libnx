@@ -3,7 +3,13 @@
 #
 # Die WSL-Installation ist blank; make fehlt ebenso wie zuvor pkg-config.
 # Quelle ist wieder das devkitPro-Image, das ohnehin lokal liegt.
-set -eu
+set -euo pipefail
+
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo "extract-make.sh extracts a Linux ELF binary from the devkitPro image (WSL)." >&2
+  echo "On macOS use: make (Xcode CLT/Homebrew: brew install make)" >&2
+  exit 1
+fi
 
 TAR="/mnt/e/make.tar"
 BIN="$HOME/bin"

@@ -7,7 +7,7 @@
 # Bewusst nicht der komplette Engine-Build: Erst müssen die unteren Schichten
 # übersetzen. fml ist die Betriebssystemabstraktion der Engine und damit die
 # erste Schicht, die überhaupt Horizon-spezifisch werden kann.
-set -u
+set -euo pipefail
 
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 OUT="${OUT:-out/horizon_release_arm64}"

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
 # Erzeugt die Symboltabelle fuer das statisch gelinkte libmpv
 # (devkitPro-Portlib switch-libmpv) - Gegenstueck zu build-sqlite3.sh.
 #
@@ -7,12 +11,12 @@
 # Wie bei sqlite3 zaehlen auch Datensymbole (D/B/R/G), nicht nur
 # Funktionen, und die Tabelle ist zugleich der Anker, der den Linker
 # zwingt, libmpv ueberhaupt in die NRO aufzunehmen.
-set -eu
+set -euo pipefail
 
-REPO=/mnt/e/flutter-libnx
+REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 OUT="$REPO/third_party/mpv"
-LIB="$HOME/devkitpro/portlibs/switch/lib/libmpv.a"
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
+LIB="$DEVKITPRO/portlibs/switch/lib/libmpv.a"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
 
 mkdir -p "$OUT"
 

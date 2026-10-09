@@ -15,9 +15,9 @@
 #   2. Engine        - traegt denselben Hash, erwartet ihn im Snapshot
 #   3. Snapshot      - mit dem gen_snapshot aus Schritt 1 erzeugt
 #   4. NRO           - linkt Engine und Snapshot zusammen
-set -u
+set -euo pipefail
 
-REPO=/mnt/e/flutter-libnx
+REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 OUT="${OUT:-out/horizon_release_arm64}"
 EXAMPLE="${1:-ui_app}"

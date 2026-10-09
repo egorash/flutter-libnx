@@ -8,6 +8,12 @@
 # Quelle ist das devkitPro-Image, das ohnehin schon lokal liegt.
 set -euo pipefail
 
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo "extract-pkgconf.sh extracts a Linux ELF binary from the devkitPro image (WSL)." >&2
+  echo "On macOS use: pkg-config (Homebrew: brew install pkgconf)" >&2
+  exit 1
+fi
+
 TAR="/mnt/e/pkgconf.tar"
 BIN="$HOME/bin"
 

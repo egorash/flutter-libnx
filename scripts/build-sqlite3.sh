@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+
 # Baut sqlite3 (Amalgamation, third_party/sqlite3) als statische Bibliothek
 # fuer Horizon und erzeugt die Symboltabelle fuer die FFI-Aufloesung.
 #
@@ -27,11 +30,11 @@
 # der Embedder macht "unix-none" (keine Sperren) zum Standard-VFS, sobald die
 # Bibliothek zum ersten Mal angefordert wird. Auf einer Konsole greift kein
 # zweiter Prozess auf die Datenbank zu.
-set -eu
+set -euo pipefail
 
-REPO=/mnt/e/flutter-libnx
+REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 SRC="$REPO/third_party/sqlite3"
-DEVKITA64="$HOME/devkitpro/devkitA64"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
 CC="$DEVKITA64/bin/aarch64-none-elf-gcc"
 AR="$DEVKITA64/bin/aarch64-none-elf-gcc-ar"
 NM="$DEVKITA64/bin/aarch64-none-elf-nm"
@@ -43,7 +46,7 @@ echo "==> sqlite3.c uebersetzen"
   -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC \
   -O2 -g -ffunction-sections -fdata-sections \
   -D__SWITCH__ \
-  -I"$HOME/devkitpro/libnx/include" \
+  -I"$DEVKITPRO/libnx/include" \
   -DSQLITE_THREADSAFE=1 \
   -DSQLITE_OMIT_LOAD_EXTENSION \
   -DSQLITE_OMIT_WAL \

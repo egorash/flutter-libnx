@@ -3,7 +3,7 @@
 #
 # Erwartung beim ersten Lauf: Fehlschlag. Der Zweck ist, die Fehlermeldung zu
 # bekommen, statt sie zu erraten.
-set -u
+set -uo pipefail
 
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 GN="$SRC/flutter/third_party/gn/gn"
@@ -20,7 +20,7 @@ echo "==> gn gen $OUT"
 echo "    target_os=horizon target_cpu=arm64"
 echo
 
-DEVKITPRO="${DEVKITPRO:-$HOME/devkitpro}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 # Diese vier Angaben verlangt //flutter/shell/version/version.gni per assert.
 # Sie landen nur in Artefaktnamen und in der Versionsausgabe der Engine, sind
 # also für den Build selbst folgenlos – müssen aber gesetzt sein.

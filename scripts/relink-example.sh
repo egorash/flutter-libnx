@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 # Erzwingt einen Neulink des Beispiels und fasst das Ergebnis zusammen.
 # Das Makefile kennt libflutter_engine.a nicht als Abhaengigkeit, deshalb muss
 # die ELF weg, damit ueberhaupt neu gelinkt wird.
-set -u
+set -uo pipefail
 EX="${1:-engine_link_test}"
-D="/mnt/e/flutter-libnx/examples/$EX"
+D="$REPO/examples/$EX"
 # Nicht nach /tmp: Wird die WSL-Instanz zwischen zwei Aufrufen beendet, ist das
 # Protokoll weg - und ein leeres Protokoll sieht aus wie "null Fehler".
-LOG="/mnt/e/flutter-libnx/build-logs/link-$EX.log"
+LOG="$REPO/build-logs/link-$EX.log"
 mkdir -p "$(dirname "$LOG")"
 
 rm -f "$D/$EX.elf"
-bash /mnt/e/flutter-libnx/scripts/build-example-wsl.sh "$EX" > "$LOG" 2>&1
+bash $REPO/scripts/build-example-wsl.sh "$EX" > "$LOG" 2>&1
 BUILD_RC=$?
 
 # Erst prüfen, ob überhaupt gelinkt wurde. Ein leeres Protokoll und ein
