@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-set -u
-OUT="$HOME/engine/flutter/engine/src/out/horizon_release_arm64"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
+set -uo pipefail
+OUT="${OUT:-$SRC/out/horizon_release_arm64}"
 LIB="$OUT/obj/flutter/shell/platform/embedder/libflutter_engine.a"
-AR="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-ar"
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
+AR="$DEVKITA64/bin/aarch64-none-elf-ar"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
 
 echo "=== Archiv"
 ls -lh "$LIB" | awk '{print "  " $5 "  " $9}'

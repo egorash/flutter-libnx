@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src/flutter/fml"
-OUT="$HOME/engine/flutter/engine/src/out/horizon_release_arm64"
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
+set -uo pipefail
+S="$SRC/flutter/fml"
+OUT="${OUT:-$SRC/out/horizon_release_arm64}"
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
 
 echo "=== MessageLoopImpl::Create"
 grep -n -A25 "MessageLoopImpl::Create" "$S/message_loop_impl.cc"
@@ -18,7 +24,7 @@ ls "$OUT/obj/flutter/fml"/*message_loop* 2>/dev/null
 
 echo
 echo "=== timerfd/epoll im gelinkten Programm?"
-E="/mnt/e/flutter-libnx/examples/engine_link_test/engine_link_test.elf"
+E="$REPO/examples/engine_link_test/engine_link_test.elf"
 for s in timerfd_create epoll_create1 epoll_wait eventfd; do
   if "$NM" --undefined-only "$E" 2>/dev/null | grep -q " U $s\$"; then
     echo "  UNDEFINIERT $s"

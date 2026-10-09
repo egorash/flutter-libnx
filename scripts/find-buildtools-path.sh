@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC"
 echo "=== buildtools_path im gesamten Baum (ohne third_party)"
 grep -rn "buildtools_path" "$S/build" "$S/build_overrides" "$S/flutter/build" 2>/dev/null | head -10
 echo

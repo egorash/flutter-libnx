@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
+set -uo pipefail
+S="$SRC"
 OUT="$S/out/horizon_release_arm64"
 
 echo "=== Wer ruft sysconf?"
@@ -10,7 +15,7 @@ grep -B4 "undefined reference to \`sysconf'" /tmp/link.log | head -12
 echo
 echo "=== _SC_-Konstanten in newlib"
 grep -rn "define _SC_PAGESIZE\|define _SC_PAGE_SIZE\|define _SC_NPROCESSORS_ONLN" \
-  "$HOME/devkitpro/devkitA64/aarch64-none-elf/include/sys/unistd.h" 2>/dev/null | head
+  "$DEVKITA64/aarch64-none-elf/include/sys/unistd.h" 2>/dev/null | head
 
 echo
 echo "=== dart_use_fallback_root_certificates in args.gn?"

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
+set -uo pipefail
+S="$SRC"
 OUT="$S/out/horizon_release_arm64"
 
 echo "=== FreeType-Ports von Skia (SkFontHost_FreeType)"
@@ -23,5 +28,5 @@ echo
 echo "  Groesse des gebauten Objekts:"
 O="$OUT/obj/third_party/abseil-cpp/absl/base/internal/malloc_internal.low_level_alloc.o"
 ls -l "$O" 2>/dev/null | awk '{print "  " $5 " Bytes"}'
-"$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm" --defined-only "$O" 2>/dev/null | wc -l \
+"$DEVKITA64/bin/aarch64-none-elf-nm" --defined-only "$O" 2>/dev/null | wc -l \
   | sed 's/^/  definierte Symbole: /'

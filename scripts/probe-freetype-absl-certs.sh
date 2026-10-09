@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC"
 OUT="$S/out/horizon_release_arm64"
 
 echo "=== 1. FreeType: wird typeface_freetype gebaut?"

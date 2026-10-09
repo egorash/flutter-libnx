@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC"
 
 echo "=== flutter/skia/BUILD.gn, Kopf der Konfiguration"
 sed -n '1,60p' "$S/flutter/skia/BUILD.gn"

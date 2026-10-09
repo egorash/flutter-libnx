@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-set -u
-S="$HOME/engine/flutter/engine/src"
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+SRC="${SRC:-$HOME/engine/flutter/engine/src}"
+
+set -uo pipefail
+S="$SRC"
 
 echo "=== Wer bindet absl/synchronization ein?"
 grep -rl "absl/synchronization/mutex.h" "$S/flutter" \
-  --include=*.cc --include=*.h 2>/dev/null | head -10
+  --include='*.cc' --include='*.h' 2>/dev/null | head -10
 
 echo
 echo "=== Wer bindet absl/debugging (Stacktrace) ein?"
-grep -rl "absl/debugging" "$S/flutter" --include=*.cc --include=*.h 2>/dev/null | head -10
+grep -rl "absl/debugging" "$S/flutter" --include='*.cc' --include='*.h' 2>/dev/null | head -10
 
 echo
 echo "=== abseil-Ziele, die die Engine als deps fuehrt"

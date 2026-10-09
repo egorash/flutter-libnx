@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
+# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
+DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
+
 # Prueft, welche *at-Funktionen und Verzeichnis-Helfer newlib/libnx anbieten.
-set -u
-NM="$HOME/devkitpro/devkitA64/bin/aarch64-none-elf-nm"
-LIBDIR="$HOME/devkitpro/devkitA64/aarch64-none-elf/lib"
-NXLIB="$HOME/devkitpro/libnx/lib"
+set -uo pipefail
+NM="$DEVKITA64/bin/aarch64-none-elf-nm"
+LIBDIR="$DEVKITA64/aarch64-none-elf/lib"
+NXLIB="$DEVKITPRO/libnx/lib"
 
 echo "=== Definitionen in den Bibliotheken"
 for s in mkdirat unlinkat fdopendir dirfd openat renameat faccessat \
