@@ -128,6 +128,25 @@
 
 ## 2. PowerShell (порт на bash) и Python (14)
 
+> **Статус порта (Этап 6, коммиты `feat(macos):`):** все 8 `.ps1` портированы
+> в bash-скрипты рядом (`build-dart-app.sh`, `build-ui-app.sh`,
+> `build-aot-poc.sh`, `dkp.sh`, `nxlink-upload.sh`, `log-listener.sh`,
+> `fetch-reference.sh`, `probe-app-toolchain.sh`). Оригиналы `.ps1`
+> **не удаляются и не переименовываются** — Windows/WSL-поток сохранён.
+> Изменения контрактов (getopts вместо `param()`):
+> - `build-dart-app.sh --project PFAD|--product` (дефолт `examples/ui_app`);
+> - `build-ui-app.sh` — без аргументов (как оригинал);
+> - `build-aot-poc.sh` — без аргументов; `GEN_SNAPSHOT` для override;
+> - `dkp.sh <WorkDir> <Befehl...>` — нативный devkitPro, docker — fallback;
+> - `nxlink-upload.sh --switch-ip IP [--example NAME] [-- args...]`;
+> - `log-listener.sh [--port N] [--timeout N] [--out DATEI]` — python3-socket
+>   (BSD-nc не умеет ждать соединение);
+> - `fetch-reference.sh`, `probe-app-toolchain.sh` — как оригиналы.
+> Windows-специфика заменена: `.exe` убраны, `C:\Users\...\flutter` →
+> `$FLUTTER_HOME` (дефолт `~/flutter-3.41.6`), `windows-x64\icudtl.dat` →
+> `darwin-arm64/icudtl.dat` (+поиск), финал «WSL bash /mnt/e/...» → локальный
+> `$root/scripts/rebuild-all.sh`.
+
 | Скрипт | Назначение | Зависимости | macOS-риски | Приоритет |
 |---|---|---|---|---|
 | `build-aot-poc.ps1` | Собирает пример `aot_poc`: gen_kernel → gen_snapshot (AArch64) → `make` в devkitA64, печатает defined-символы. | dartaotruntime + `gen_kernel_aot.dart.snapshot`, `gen_snapshot.exe`, `dkp.ps1` (docker), `aarch64-none-elf-nm`; env: `USERPROFILE`, `PSScriptRoot`, `LASTEXITCODE`; жёсткий `C:\Users\mirkorichter\flutter` | PS-конструкции (`Split-Path`, `Test-Path`, `New-Item`, `Write-Host`, `&`, `$LASTEXITCODE`, `\`-пути, `.exe`); вызов `dkp.ps1` (docker). Нужен `build-aot-poc.sh` + `dkp.sh` | высокий |
