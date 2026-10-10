@@ -43,7 +43,7 @@ flutter_runtime_mode=\"release\" dart_runtime_mode=\"release\" \
 dart_use_compressed_pointers=false \
 dart_use_fallback_root_certificates=true \
 buildtools_path=\"//flutter/buildtools\" \
-shell_enable_gl=false test_enable_gl=false test_enable_vulkan=false \
+shell_enable_gl=true test_enable_gl=false test_enable_vulkan=false \
 devkitpro_root=\"$DEVKITPRO\" engine_version=\"$ENGINE_VERSION\" \
 content_hash=\"$ENGINE_VERSION\" skia_version=\"$SKIA_VERSION\" \
 dart_version=\"$DART_VERSION\"" \

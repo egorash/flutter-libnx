@@ -83,6 +83,15 @@
   в `/opt/devkitpro`, дефолт приведёт к неверному `devkitpro_root`.
 - Строка 50: `2>&1 | tail -40` обрезает вывод `gn gen`; реальная причина
   падения может потеряться.
+- Строка 46: **`shell_enable_gl` обязан быть `true`.** С `false` движок
+  собирается без GL-рендерера: `FlutterEngineInitialize` возвращает
+  `kInternalInconsistency`, в логе —
+  `[ERROR] This Flutter Engine does not support OpenGL rendering.
+  (embedder.cc:518)`, на экране чёрный кадр. Это соответствует upstream
+  Milestone 5 (`docs/status.md`, `docs/porting-notes.md`: `shell_enable_gl=true`
+  + `skia_use_gl=true`, Impeller выключен). `skia_use_gl` для Horizon задаёт
+  патч `flutter/skia/BUILD.gn` (`patch_skia_config`), отдельный GN-аргумент
+  не нужен.
 
 **`build-sqlite3.sh`**
 - Строка 32: `REPO=/mnt/e/flutter-libnx` — отсутствует на macOS.
