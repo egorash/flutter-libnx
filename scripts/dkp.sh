@@ -36,7 +36,7 @@ run_native() {
 }
 
 if [ -x "$DEVKITA64/bin/aarch64-none-elf-gcc" ]; then
-  run_native
+  run_native "$@"
   exit $?
 fi
 

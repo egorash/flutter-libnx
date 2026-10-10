@@ -15,19 +15,19 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 flutter="${FLUTTER_HOME:-$HOME/flutter-3.41.6}"
 sdk="$flutter/bin/cache/dart-sdk"
-engine="$flutter/bin/cache/artifacts/engine"
 
-# host-abhaengiger gen_snapshot unter artifacts/engine (macOS: darwin-arm64;
-# Fallback: irgendein gen_snapshot*).
-gen_snap="${GEN_SNAPSHOT:-}"
-if [ -z "$gen_snap" ]; then
-  gen_snap="$(find "$engine" -type f \( -name 'gen_snapshot' -o -name 'gen_snapshot.exe' \) \
-    -path '*darwin*' 2>/dev/null | head -1 || true)"
+# gen_snapshot muss mit DART_TARGET_OS_HORIZON gebaut sein: Nur dann ist die
+# app-aot-assembly GNU/ELF-Syntax (aarch64-none-elf-as versteht kein Mach-O,
+# wie das Flutter-SDK-Artefakt es erzeugt). Er liegt daher im Host-Toolchain
+# des Engine-Outs, nicht in den SDK-Artefakten - siehe rebuild-all.sh, Schritt 1.
+engine_src="${ENGINE_SRC:-$HOME/engine/flutter/engine/src}"
+engine_out="${ENGINE_OUT:-$engine_src/out/horizon_release_arm64}"
+if [ "$(uname -s)" = "Darwin" ]; then
+  host_tc="clang_arm64"
+else
+  host_tc="clang_x64"
 fi
-if [ -z "$gen_snap" ]; then
-  gen_snap="$(find "$engine" -type f \( -name 'gen_snapshot' -o -name 'gen_snapshot.exe' \) \
-    2>/dev/null | head -1 || true)"
-fi
+gen_snap="${GEN_SNAPSHOT:-$engine_out/$host_tc/gen_snapshot_product}"
 
 poc="$root/examples/aot_poc"
 generated="$poc/generated"
@@ -51,10 +51,10 @@ lines="$(wc -l < "$generated/hello_aot.s" | tr -d ' ')"
 echo "    $lines Zeilen Assembly"
 
 echo '==> NRO bauen (devkitA64)'
-"$root/scripts/dkp.sh" examples/aot_poc make
+bash "$root/scripts/dkp.sh" examples/aot_poc make
 
 echo '==> Symbole in der ELF'
-"$root/scripts/dkp.sh" examples/aot_poc \
+bash "$root/scripts/dkp.sh" examples/aot_poc \
   '/opt/devkitpro/devkitA64/bin/aarch64-none-elf-nm --defined-only aot_poc.elf | grep -i "kDart.*Snapshot"'
 
 echo 'Fertig.'

@@ -142,7 +142,7 @@ defines=()
   --target=flutter \
   --aot \
   --packages "$packages" \
-  "${defines[@]}" \
+  "${defines[@]+"${defines[@]}"}" \
   -o "$dill" \
   "$entry"
 

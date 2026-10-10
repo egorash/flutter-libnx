@@ -1,4 +1,4 @@
-﻿#---------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------
 # Abgeleitet vom offiziellen devkitPro-Template
 # (switchbrew/switch-examples: templates/application/Makefile).
 # GeÃ¤ndert gegenÃ¼ber dem Original: TARGET, SOURCES, INCLUDES, APP_*.
