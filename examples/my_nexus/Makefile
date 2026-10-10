@@ -1,0 +1,299 @@
+#---------------------------------------------------------------------------------
+# Abgeleitet vom offiziellen devkitPro-Template
+# (switchbrew/switch-examples: templates/application/Makefile).
+# Aequivalent zu examples/ui_app/Makefile; unterschiedlich sind nur TARGET und
+# APP_TITLE (Name, App-Kennung, Logfile, NACP-Titel).
+#
+# Der generische Horizon-Runner (source/main.cpp) wird mit ui_app geteilt:
+# examples/my_nexus/source/main.cpp ist ein Symlink dorthin, damit der rund
+# 1000 Zeilen lange Embedder-Einstieg nicht dupliziert wird. Der Runner ist
+# app-unabhaengig - er startet nur den Dart-Einstiegspunkt "main"; die
+# App-Kennung kommt über -DFLUTTER_LIBNX_APP_ID aus dem Build.
+#---------------------------------------------------------------------------------
+.SUFFIXES:
+#---------------------------------------------------------------------------------
+
+ifeq ($(strip $(DEVKITPRO)),)
+$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
+endif
+
+TOPDIR ?= $(CURDIR)
+include $(DEVKITPRO)/libnx/switch_rules
+
+#---------------------------------------------------------------------------------
+TARGET		:=	my_nexus
+BUILD		:=	build
+# embedder/src/engine enthaelt, was den Engine-Header braucht - deshalb
+# getrennt von der Plattformschicht, damit kleine Beispiele ohne Engine (etwa
+# thread_probe) weiterhin bauen.
+SOURCES		:=	source generated ../../embedder/src ../../embedder/src/platform ../../embedder/src/engine
+DATA		:=	data
+INCLUDES	:=	../../embedder/include
+ROMFS	:=	romfs
+
+APP_TITLE	:=	my_nexus
+APP_AUTHOR	:=	flutter-libnx
+APP_VERSION	:=	0.1.0
+
+#---------------------------------------------------------------------------------
+# options for code generation
+#---------------------------------------------------------------------------------
+ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+
+CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
+			$(ARCH) $(DEFINES)
+
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__
+# Die App-Kennung bestimmt das Datenverzeichnis der Plugins
+# (/switch/flutter_apps/<id>/). Sie kommt aus dem Build statt fest im
+# Quelltext zu stehen - jede App bekommt so automatisch ihr eigenes.
+CFLAGS	+=	-DFLUTTER_LIBNX_APP_ID=\"$(TARGET)\"
+
+#---------------------------------------------------------------------------------
+# Fuer Horizon gebaute Flutter Engine.
+#
+# Absolute Pfade koennen nicht ueber INCLUDES/LIBDIRS laufen: Das Template
+# stellt dort $(CURDIR) voran bzw. erwartet ein lib/-Unterverzeichnis. Deshalb
+# direkt ueber CFLAGS und LIBS.
+#---------------------------------------------------------------------------------
+ENGINE_SRC	?=	$(HOME)/engine/flutter/engine/src
+ENGINE_OUT	?=	$(ENGINE_SRC)/out/horizon_release_arm64
+ENGINE_LIB	:=	$(ENGINE_OUT)/obj/flutter/shell/platform/embedder/libflutter_engine.a
+ENGINE_INC	:=	$(ENGINE_SRC)/flutter/shell/platform/embedder
+
+CFLAGS	+=	-I$(ENGINE_INC)
+CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++20
+
+ASFLAGS	:=	-g $(ARCH)
+#---------------------------------------------------------------------------------
+# Verzeichnis-Deskriptoren gibt es auf Horizon nicht (siehe
+# embedder/src/platform/posix_compat_horizon.cpp). Damit die Handles, die
+# diese Schicht vergibt, auch bei dup/close/fstat erkannt werden, laufen die
+# drei Aufrufe ueber Wrapper. Fuer echte Deskriptoren reichen sie unveraendert
+# an libc weiter.
+#---------------------------------------------------------------------------------
+WRAPS	:=	-Wl,--wrap=close -Wl,--wrap=dup -Wl,--wrap=fstat
+# Lesen hinter dem Dateiende: devoptab liefert -1 statt 0 (EOF). Der Wrap
+# stellt die POSIX-Semantik her - ohne ihn haelt sqlite frische Datenbanken
+# fuer beschaedigt. Einzelheiten in posix_compat_horizon.cpp.
+WRAPS	+=	-Wl,--wrap=read
+# stat() auf gerade geoeffnete Dateien: devoptab liefert EIO. Der Wrap holt
+# die Werte per open+fstat nach - sqlite fragt beim Journal-Anlegen genau so
+# die Rechte der offenen Datenbank ab (IOERR_FSTAT 1802).
+WRAPS	+=	-Wl,--wrap=stat
+# Virtuelle Dateihandles: Der Dateidienst haelt offene Dateien exklusiv,
+# ein zweites open() auf denselben Pfad scheitert mit EIO. Hive oeffnet
+# jede Box doppelt (Lese- und Schreib-Handle). Pro Pfad ein echter
+# Deskriptor, jedes open() ein virtuelles Handle mit eigenem Offset;
+# fcntl-Sperren sind auf der Einprozess-Konsole trivial erfuellt.
+# Einzelheiten in posix_compat_horizon.cpp.
+WRAPS	+=	-Wl,--wrap=open -Wl,--wrap=write -Wl,--wrap=lseek
+WRAPS	+=	-Wl,--wrap=ftruncate -Wl,--wrap=fcntl
+# fsync auf virtuellen Handles: newlib kennt die Nummer nicht (EBADF beim
+# flush von Dart/media_kit). Uebersetzung + FAT-Toleranz in der Compat-Schicht.
+WRAPS	+=	-Wl,--wrap=fsync
+
+# DIAGNOSE (flutter-libnx): Waechter um jede Heap-Allokation, siehe
+# embedder/src/platform/heap_guard_horizon.cpp. Sucht die Speicherbeschaedigung,
+# die sich als Data Abort in _malloc_r zeigt. Kostet Speicher und Zeit - nach
+# der Fehlersuche wieder entfernen.
+# ABGESCHALTET (2026-08-11). Der Ansatz war zu eingreifend und hat zweimal
+# eigene Fehler erzeugt, ohne den gesuchten zu finden - Einzelheiten in
+# docs/porting-notes.md. Wer ihn wieder einschaltet, muss vorher die dort
+# genannten drei Bedingungen erfuellen.
+#WRAPS	+=	-Wl,--wrap=malloc -Wl,--wrap=free -Wl,--wrap=calloc -Wl,--wrap=realloc
+#WRAPS	+=	-Wl,--wrap=memalign
+
+# -u erzwingt die Einbindung des Absturzberichts. Aufgerufen wird er nur aus
+# libnx' Assembler-Zweig, im Programm referenziert ihn niemand - ohne das darf
+# der Linker ihn wegwerfen, und dann fehlt er genau dann, wenn er gebraucht
+# wird.
+LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) $(WRAPS) -Wl,-u,__libnx_exception_handler -Wl,--allow-multiple-definition -Wl,-Map,$(notdir $*.map)
+
+# Statisch gelinktes sqlite3 (third_party/sqlite3, scripts/build-sqlite3.sh).
+# Ueber MAKEFILE_LIST statt CURDIR, weil das Template sich selbst mit
+# geaendertem Arbeitsverzeichnis erneut aufruft.
+SQLITE_LIB	:= $(dir $(abspath $(firstword $(MAKEFILE_LIST))))../../third_party/sqlite3/libsqlite3.a
+
+# GPU-Rendering: Mesa (EGL + Desktop-GL ueber nouveau) aus den Portlibs.
+# Reihenfolge zaehlt: EGL braucht glapi, glapi braucht drm_nouveau, alles
+# braucht nx.
+#
+# libmpv (Portlib switch-libmpv) samt Gefolge fuer media_kit: FFmpeg,
+# libass, libplacebo, libarchive, SDL2 (Audioausgabe). Die ENGINE_LIB
+# steht bewusst VORN - ihr eingebautes Freetype/Harfbuzz bedient auch
+# libass; die Portlib-Varianten bleiben draussen (zwei Freetypes in
+# einer NRO waeren ein Duplikatrisiko).
+MPV_LIBS	:= -lmpv -lass -lfribidi -lplacebo \
+	-lavfilter -lavformat -lavcodec -lpostproc -lswscale -lswresample \
+	-lavutil -ldav1d -larchive -lzstd -lSDL2 -lbz2 -llzma -lz
+# Kein -ljpeg: libjpeg-turbo steckt in der Engine und bedient FFmpeg mit.
+# zlib ist doppelt vorhanden (Engine-Teilkopie + Portlib) - beide sind
+# Standard-zlib, --allow-multiple-definition laesst die erste Definition
+# gewinnen. Ohne Portlib-z fehlen inflate/crc32 (Engine-Kopie ist
+# unvollstaendig), ohne den Schalter kollidieren 59 Symbole.
+
+# start/end-group: FFmpeg braucht zlib/jpeg AUS der Engine-Bibliothek, die
+# im Einweg-Durchlauf schon abgehandelt waere - die Gruppe laesst den
+# Linker iterieren, bis sich nichts mehr aufloest.
+LIBS	:= -Wl,--start-group $(ENGINE_LIB) $(SQLITE_LIB) $(MPV_LIBS) -Wl,--end-group -lEGL -lglapi -ldrm_nouveau -lnx
+
+#---------------------------------------------------------------------------------
+# list of directories containing libraries, this must be the top level containing
+# include and lib
+#---------------------------------------------------------------------------------
+LIBDIRS	:= $(PORTLIBS) $(LIBNX)
+
+
+#---------------------------------------------------------------------------------
+# no real need to edit anything past this point unless you need to add additional
+# rules for different file extensions
+#---------------------------------------------------------------------------------
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+#---------------------------------------------------------------------------------
+
+export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export TOPDIR	:=	$(CURDIR)
+
+export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+
+export DEPSDIR	:=	$(CURDIR)/$(BUILD)
+
+CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+
+#---------------------------------------------------------------------------------
+# use CXX for linking C++ projects, CC for standard C
+#---------------------------------------------------------------------------------
+ifeq ($(strip $(CPPFILES)),)
+#---------------------------------------------------------------------------------
+	export LD	:=	$(CC)
+#---------------------------------------------------------------------------------
+else
+#---------------------------------------------------------------------------------
+	export LD	:=	$(CXX)
+#---------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------
+
+export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
+export OFILES_SRC	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
+export HFILES_BIN	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
+
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+			-I$(CURDIR)/$(BUILD)
+
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+
+ifeq ($(strip $(CONFIG_JSON)),)
+	jsons := $(wildcard *.json)
+	ifneq (,$(findstring $(TARGET).json,$(jsons)))
+		export APP_JSON := $(TOPDIR)/$(TARGET).json
+	else
+		ifneq (,$(findstring config.json,$(jsons)))
+			export APP_JSON := $(TOPDIR)/config.json
+		endif
+	endif
+else
+	export APP_JSON := $(TOPDIR)/$(CONFIG_JSON)
+endif
+
+ifeq ($(strip $(ICON)),)
+	icons := $(wildcard *.jpg)
+	ifneq (,$(findstring $(TARGET).jpg,$(icons)))
+		export APP_ICON := $(TOPDIR)/$(TARGET).jpg
+	else
+		ifneq (,$(findstring icon.jpg,$(icons)))
+			export APP_ICON := $(TOPDIR)/icon.jpg
+		endif
+	endif
+else
+	export APP_ICON := $(TOPDIR)/$(ICON)
+endif
+
+ifeq ($(strip $(NO_ICON)),)
+	export NROFLAGS += --icon=$(APP_ICON)
+endif
+
+ifeq ($(strip $(NO_NACP)),)
+	export NROFLAGS += --nacp=$(CURDIR)/$(TARGET).nacp
+endif
+
+ifneq ($(APP_TITLEID),)
+	export NACPFLAGS += --titleid=$(APP_TITLEID)
+endif
+
+ifneq ($(ROMFS),)
+	export NROFLAGS += --romfsdir=$(CURDIR)/$(ROMFS)
+endif
+
+.PHONY: $(BUILD) clean all
+
+#---------------------------------------------------------------------------------
+all: $(BUILD)
+
+$(BUILD):
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+
+#---------------------------------------------------------------------------------
+clean:
+	@echo clean ...
+ifeq ($(strip $(APP_JSON)),)
+	@rm -fr $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf
+else
+	@rm -fr $(BUILD) $(TARGET).nsp $(TARGET).nso $(TARGET).npdm $(TARGET).elf
+endif
+
+
+#---------------------------------------------------------------------------------
+else
+.PHONY:	all
+
+DEPENDS	:=	$(OFILES:.o=.d)
+
+#---------------------------------------------------------------------------------
+# main targets
+#---------------------------------------------------------------------------------
+ifeq ($(strip $(APP_JSON)),)
+
+all	:	$(OUTPUT).nro
+
+ifeq ($(strip $(NO_NACP)),)
+$(OUTPUT).nro	:	$(OUTPUT).elf $(OUTPUT).nacp
+else
+$(OUTPUT).nro	:	$(OUTPUT).elf
+endif
+
+else
+
+all	:	$(OUTPUT).nsp
+
+$(OUTPUT).nsp	:	$(OUTPUT).nso $(OUTPUT).npdm
+
+$(OUTPUT).nso	:	$(OUTPUT).elf
+
+endif
+
+$(OUTPUT).elf	:	$(OFILES)
+
+$(OFILES_SRC)	: $(HFILES_BIN)
+
+#---------------------------------------------------------------------------------
+# you need a rule like this for each extension you use as binary data
+#---------------------------------------------------------------------------------
+%.bin.o	%_bin.h :	%.bin
+#---------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	@$(bin2o)
+
+-include $(DEPENDS)
+
+#---------------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------------

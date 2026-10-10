@@ -11,11 +11,14 @@
 # Aufruf:
 #   build-dart-app.sh                         -> examples/ui_app
 #   build-dart-app.sh --project /pfad/app     -> beliebiges Projekt
+#   build-dart-app.sh --example my_nexus --project /pfad/app
+#                                             -> Ausgabe nach examples/my_nexus
 #   build-dart-app.sh --product               -> -Ddart.vm.product=true
 #
 # WICHTIG zum Projektpfad: wie im Original liegen Ausgabeziele (generated/,
-# romfs/) NEBEN dem Beispiel examples/ui_app, nicht im fremden Projekt - ein
-# Werkzeug soll das Projekt, das es uebersetzt, nicht veraendern.
+# romfs/) NEBEN dem gewaehlten Beispiel (--example, Standard examples/ui_app),
+# nicht im fremden Projekt - ein Werkzeug soll das Projekt, das es uebersetzt,
+# nicht veraendern.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,26 +37,29 @@ if [ ! -f "$icu" ]; then
 fi
 
 project=""
+example="ui_app"
 product=0
 usage() {
-  echo "Verwendung: $0 [--project PFAD] [--product]" >&2
+  echo "Verwendung: $0 [--project PFAD] [--example NAME] [--product]" >&2
   exit 1
 }
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) project="${2:?--project braucht einen Pfad}"; shift 2 ;;
     --project=*) project="${1#*=}"; shift ;;
+    --example) example="${2:?--example braucht einen Namen}"; shift 2 ;;
+    --example=*) example="${1#*=}"; shift ;;
     --product) product=1; shift ;;
     -h|--help) usage ;;
     *) echo "Unbekanntes Argument: $1" >&2; usage ;;
   esac
 done
 
-if [ -z "$project" ]; then project="$root/examples/ui_app/dart"; fi
+if [ -z "$project" ]; then project="$root/examples/$example/dart"; fi
 project="$(cd "$project" && pwd)"
 
-# Das Ausgabeziel liegt neben dem Beispiel (siehe Kopf).
-app="$root/examples/ui_app"
+# Das Ausgabeziel liegt neben dem gewaehlten Beispiel (siehe Kopf).
+app="$root/examples/$example"
 generated="$app/generated"
 romfs="$app/romfs"
 assets="$romfs/flutter_assets"
@@ -151,4 +157,4 @@ defines=()
 # clang_x64/gen_snapshot_product (Snapshot-Hash aus 15 geaenderten
 # Dart-Quellen; kein Compressed Pointers) - siehe scripts/rebuild-all.sh.
 echo
-echo "Weiter mit: $root/scripts/rebuild-all.sh ui_app"
+echo "Weiter mit: $root/scripts/rebuild-all.sh $example"

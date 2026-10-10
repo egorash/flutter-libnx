@@ -144,6 +144,19 @@
   подсказка указывает на `build-dart-app.sh` (вместо `.ps1`).
 - **`build-dart-app.sh`** — раскрытие массива `defines` защищено
   (`${defines[@]+...}`), иначе пустой массив под `set -u` роняет kernel-шаг.
+  Добавлен флаг **`--example NAME`** (дефолт `ui_app`): выходные каталоги
+  (`generated/`, `romfs/`) кладутся в `examples/NAME`, а не всегда в
+  `examples/ui_app`. Дефолтный `--project` — `examples/NAME/dart`. Подсказка
+  в конце указывает на `rebuild-all.sh NAME`. Так собирается произвольное
+  приложение в отдельную цель (`examples/my_nexus`) — см. ниже.
+- **`examples/my_nexus`** (новый пример-цель) — сборка произвольного
+  Flutter-проекта в `my_nexus.nro`. `Makefile` — копия `ui_app` с другим
+  `TARGET`/`APP_TITLE`; `source/main.cpp` — **симлинк** на общий раннер
+  `examples/ui_app/source/main.cpp` (раннер app-независим). Раннер теперь
+  берёт `FLUTTER_LIBNX_APP_ID` из `-DFLUTTER_LIBNX_APP_ID="$(TARGET)"`
+  (`examples/ui_app/source/main.cpp`): от неё зависят путь лога
+  (`sdmc:/switch/flutter-libnx/<id>.log`) и текст `LOG_INFO`. Цепочка:
+  `build-dart-app.sh --example my_nexus --project <путь> && rebuild-all.sh my_nexus`.
 - **`patch-engine-horizon.py` (macOS-хост)** — пиновый `buildtools`-clang
   старше SDK 27. Для host-тулчейна (`current_os == mac`) патчер снимает
   `-Werror` (`-Wno-error`) в `build/config/compiler/BUILD.gn`; Horizon-кросс
@@ -162,7 +175,8 @@
 > `fetch-reference.sh`, `probe-app-toolchain.sh`). Оригиналы `.ps1`
 > **не удаляются и не переименовываются** — Windows/WSL-поток сохранён.
 > Изменения контрактов (getopts вместо `param()`):
-> - `build-dart-app.sh --project PFAD|--product` (дефолт `examples/ui_app`);
+> - `build-dart-app.sh --project PFAD [--example NAME] |--product` (дефолт
+>   примера `examples/ui_app`, проекта — `examples/<example>/dart`);
 > - `build-ui-app.sh` — без аргументов (как оригинал);
 > - `build-aot-poc.sh` — без аргументов; `GEN_SNAPSHOT` для override;
 > - `dkp.sh <WorkDir> <Befehl...>` — нативный devkitPro, docker — fallback;

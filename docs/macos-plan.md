@@ -197,6 +197,16 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 >
 > Для `ui_app` дополнительно нужны портлибы — `scripts/install-portlibs-macos.sh`
 > (см. этап 2a).
+>
+> **Сборка произвольного приложения (выполнено).** Цепочка обобщена на любой
+> Flutter-проект: `build-dart-app.sh --example NAME --project <путь>` →
+> `rebuild-all.sh NAME` → `examples/NAME/NAME.nro`. Заведена цель
+> `examples/my_nexus` (Makefile + симлинк `source/main.cpp` на общий раннер
+> `ui_app`), собрано реальное приложение `my_nexus` — `examples/my_nexus/my_nexus.nro`
+> (61 МБ, 3 215 605 строк AOT-ассемблера, 301 ассет, лог `my_nexus.log`,
+> NACP-title `my_nexus`). Плагины приложения (geolocator, webview, hive,
+> image_picker…) эмбеддером пока не реализованы — сборка проходит, runtime
+> зависит от портирования этих каналов.
 
 > **Особенности macOS (в отличие от WSL):**
 > - Host-`gen_snapshot` лежит в host-тулчейне: на Linux `clang_x64/`, на

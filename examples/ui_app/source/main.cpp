@@ -27,6 +27,13 @@
 #include "flutter_libnx/switch_platform.h"
 #include "flutter_libnx/task_runner.h"
 
+// Kennung der App aus dem Makefile (-DFLUTTER_LIBNX_APP_ID="<target>"). Sie
+// bestimmt das Datenverzeichnis der Plugins und den Namen des Logfiles. Der
+// Fallback greift nur, wenn die Datei ausserhalb des Makefiles uebersetzt wird.
+#ifndef FLUTTER_LIBNX_APP_ID
+#define FLUTTER_LIBNX_APP_ID "flutter_app"
+#endif
+
 // Aus thread_diag_horizon.cpp: meldet Heap-Regionen mit abweichendem
 // Memory-State. Die Kontrollpunkte unten klammern ein, welcher Schritt
 // (statische Konstruktoren, romfsInit, framebufferCreate, Engine-Start)
@@ -609,10 +616,10 @@ int main(int argc, char* argv[]) {
   log_config.to_nxlink = false;
   log_config.remote_host = kHostIp;
   log_config.remote_port = kHostPort;
-  log_config.file_path = "sdmc:/switch/flutter-libnx/ui_app.log";
+  log_config.file_path = "sdmc:/switch/flutter-libnx/" FLUTTER_LIBNX_APP_ID ".log";
   flutter_libnx::LogInit(log_config);
 
-  LOG_INFO("ui_app startet");
+  LOG_INFO(FLUTTER_LIBNX_APP_ID " startet");
 
   // So frueh wie moeglich, vor der ersten nennenswerten Allokation: geerbte
   // Mappings des Vorlaufs zurueckbauen. Muss vor der Heap-Probe laufen -
@@ -1054,7 +1061,7 @@ int main(int argc, char* argv[]) {
   // Die Senke bleibt bis zuletzt offen: Wird sie vor dem Abbau geschlossen,
   // waere jede Meldung aus der Abbauphase unsichtbar - genau der Fehler, der
   // bei dieser Fehlersuche dreimal Zeit gekostet hat.
-  LOG_INFO("ui_app beendet");
+  LOG_INFO(FLUTTER_LIBNX_APP_ID " beendet");
   flutter_libnx::LogShutdown();
   return 0;
 }
