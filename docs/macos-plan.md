@@ -184,7 +184,19 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 2. `scripts/rebuild-all.sh ui_app` → AOT-снапшот → `.nro`.
 
 **Критерий приёмки:** `ui_app.nro` собран; размер в разумных пределах
-(ориентир ~50–150 МБ).
+(ориентир ~40–150 МБ; факт — 45 МБ).
+
+> **Итог (выполнено):** `rebuild-all.sh ui_app` прошёл все 4 шага:
+> `ninja` (gen_snapshot) → `ninja` (`flutter_engine_static`) → `gen_snapshot`
+> (`app-aot-assembly`, 800 540 строк) → `relink-example.sh ui_app`.
+> Итог — `examples/ui_app/ui_app.nro` (45 МБ, magic `\0\0\x14\xf0` +
+> `HOMEBREW`, символы `_kDartVmSnapshot*`/`_kDartIsolateSnapshot*` в ELF),
+> линковка без undefined/multiple-definition. Промежуточно собран и
+> `examples/aot_poc/aot_poc.nro` (850 КБ) — он не линкует движок и проверяет
+> всю AOT-цепочку без портлибов.
+>
+> Для `ui_app` дополнительно нужны портлибы — `scripts/install-portlibs-macos.sh`
+> (см. этап 2a).
 
 > **Особенности macOS (в отличие от WSL):**
 > - Host-`gen_snapshot` лежит в host-тулчейне: на Linux `clang_x64/`, на
