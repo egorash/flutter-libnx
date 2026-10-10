@@ -139,6 +139,14 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 
 **Критерий приёмки:** получена `flutter_engine_static` и sqlite3-артефакты.
 
+> **Итог (выполнено):** `ninja ...:flutter_engine_static` → `[457/457] AR
+> .../libflutter_engine.a` (1.7 ГБ). Дополнительно на macOS пришлось
+> починить host-линкер: пиновый `buildtools`-clang автовыбором брал
+> `ld64.lld`, не понимающий тег `arm64e.x1-macos` из `MacOSX27.0.sdk`.
+> `patch-engine-horizon.py` теперь добавляет
+> `-fuse-ld=<XcodeDefault.xctoolchain/usr/bin/ld>` (только Darwin,
+> идемпотентно).
+
 **Зависимости:** Этап 4.
 
 ---
@@ -170,6 +178,19 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 
 **Критерий приёмки:** `ui_app.nro` собран; размер в разумных пределах
 (ориентир ~50–150 МБ).
+
+> **Особенности macOS (в отличие от WSL):**
+> - Host-`gen_snapshot` лежит в host-тулчейне: на Linux `clang_x64/`, на
+>   macOS `clang_arm64/`. `rebuild-all.sh` определяет платформу через
+>   `uname -s`. Это тот же кросс-`gen_snapshot`, что и в WSL: собирается
+>   нативным хост-компилятором, но эмитит Horizon/arm64-код. Из Flutter SDK
+>   брать его нельзя — у SDK другой snapshot-hash.
+> - `ninja`-экшены (напр. `generate_version_cc_file`) требуют `vpython3` из
+>   `depot_tools` в `PATH`; на macOS `rebuild-all.sh` кладёт его сам.
+> - SDK 27 ужесточил API и пользуется атрибутами, которых не знает пиновый
+>   `buildtools`-clang (`readdir_r`, `stack_protector_ignore`). Для host-тулчейна
+>   (только `current_os == mac`) `patch-engine-horizon.py` снимает `-Werror`
+>   (`-Wno-error`); Horizon-кросс-компилятор и так без `-Werror`.
 
 **Зависимости:** Этап 6.
 

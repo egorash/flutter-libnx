@@ -3724,6 +3724,56 @@ def patch_mac_toolchain_ld(src: str) -> bool:
     return True
 
 
+def patch_mac_host_warnings(src: str) -> bool:
+    """Schaltet -Werror im Mac-Host-Toolchain ab (nur macOS).
+
+    Das gepinnte buildtools-clang ist aelter als das mitgelieferte
+    MacOSX27.0.sdk. Dessen Header nutzen Attribute und markieren APIs als
+    deprecated, die der Compiler nicht kennt (z. B. stack_protector_ignore in
+    os/signpost.h, readdir_r). Mit -Werror bricht der Host-gen_snapshot sonst
+    ab - ein reines SDK-/Compiler-Versionsproblem, kein Fehler im Code. Der
+    Eingriff greift nur bei current_os == mac, also im Host-Toolchain
+    clang_arm64; der Horizon-Cross-Compiler ist via patch_werror ohnehin schon
+    ausgenommen.
+    """
+    if sys.platform != "darwin":
+        return False
+    path = os.path.join(src, "build", "config", "compiler", "BUILD.gn")
+    if not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+
+    sentinel = "# macos-port: Das gepinnte buildtools-clang"
+    if sentinel in text:
+        print("    mac-Host-Warnungen schon gepatcht (-Wno-error)")
+        return False
+
+    old = "  if (allow_deprecated_api_calls) {\n"
+    new = (
+        "  # macos-port: Das gepinnte buildtools-clang ist aelter als das mitgelieferte\n"
+        "  # MacOSX27.0.sdk. Neue SDK-Header nutzen Attribute und Deprecations, die\n"
+        "  # dieser Compiler nicht kennt (z. B. stack_protector_ignore in os/signpost.h\n"
+        "  # oder readdir_r) - mit -Werror bricht der Host-gen_snapshot deshalb ab.\n"
+        "  # Nur fuer den Mac-Host-Toolchain (current_os == mac): Der\n"
+        "  # Horizon-Cross-Compiler ist ueber patch_werror ohnehin ausgenommen.\n"
+        "  if (is_mac) {\n"
+        '    default_warning_flags += [ "-Wno-error" ]\n'
+        "  }\n\n"
+        "  if (allow_deprecated_api_calls) {\n"
+    )
+    if old not in text:
+        print("    mac-Host-Warnungen: Muster nicht gefunden, kein Eingriff",
+              file=sys.stderr)
+        return False
+
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(old, new, 1))
+    print("    mac-Host-Warnungen: -Wno-error fuer is_mac")
+    return True
+
+
 def main() -> int:
     buildconfig = os.path.join(SRC, "build", "config", "BUILDCONFIG.gn")
     if not os.path.exists(buildconfig):
@@ -3748,6 +3798,9 @@ def main() -> int:
 
     print("==> build/toolchain/mac/BUILD.gn (Host-Linker, nur macOS)")
     patch_mac_toolchain_ld(SRC)
+
+    print("==> build/config/compiler/BUILD.gn (Host-Warnungen, nur macOS)")
+    patch_mac_host_warnings(SRC)
 
     print("==> flutter/third_party/dart/runtime/BUILD.gn")
     patch_dart_runtime(SRC)

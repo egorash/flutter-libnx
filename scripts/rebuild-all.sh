@@ -15,24 +15,57 @@
 #   2. Engine        - traegt denselben Hash, erwartet ihn im Snapshot
 #   3. Snapshot      - mit dem gen_snapshot aus Schritt 1 erzeugt
 #   4. NRO           - linkt Engine und Snapshot zusammen
+#
+# Plattform: Auf Linux/WSL liegt der Host-gen_snapshot im x64-Host-Toolchain
+# (clang_x64). Auf macOS uebersetzt derselbe Toolchain als arm64 (clang_arm64);
+# beide werden vom nativen Compiler gebaut und emittieren Horizon/arm64-Code.
 set -euo pipefail
 
 REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 OUT="${OUT:-out/horizon_release_arm64}"
 EXAMPLE="${1:-ui_app}"
-GEN_SNAPSHOT="$SRC/$OUT/clang_x64/gen_snapshot_product"
+OS=$(uname -s)
+
+# OUT darf absolut (env.sh) oder relativ zu SRC sein.
+case "$OUT" in
+  /*) OUT_ABS="$OUT" ;;
+  *)  OUT_ABS="$SRC/$OUT" ;;
+esac
+
+# Host-Toolchain-Verzeichnis und Ninja-Ziel des Host-gen_snapshot.
+if [ "$OS" = "Darwin" ]; then
+  HOST_TOOLCHAIN="clang_arm64"
+else
+  HOST_TOOLCHAIN="clang_x64"
+fi
+GEN_SNAPSHOT_TARGET="$HOST_TOOLCHAIN/gen_snapshot_product"
+GEN_SNAPSHOT="$OUT_ABS/$GEN_SNAPSHOT_TARGET"
+
 GENERATED="$REPO/examples/$EXAMPLE/generated"
 LOG_DIR="$REPO/build-logs"
 
 mkdir -p "$LOG_DIR"
 
-echo "==> 1/4 gen_snapshot"
-if ! bash "$REPO/scripts/build-horizon.sh" clang_x64/gen_snapshot_product \
-     > "$LOG_DIR/rebuild-gen-snapshot.log" 2>&1; then
-  echo "FEHLGESCHLAGEN - siehe $LOG_DIR/rebuild-gen-snapshot.log"
-  grep -E "error:" "$LOG_DIR/rebuild-gen-snapshot.log" | head -10
-  exit 1
+echo "==> 1/4 gen_snapshot ($GEN_SNAPSHOT_TARGET)"
+# Auf Linux kapselt build-horizon.sh den Aufruf inkl. depot_tools-PATH; auf
+# macOS rufen wir ninja direkt auf, brauchen aber vpython3 fuer die
+# generate_version_cc_file-Action, also depot_tools ebenfalls im PATH.
+if [ "$OS" = "Darwin" ]; then
+  if ! PATH="${DEPOT_TOOLS:-$HOME/depot_tools}:$PATH" \
+       ninja -C "$OUT_ABS" -j"${JOBS:-4}" "$GEN_SNAPSHOT_TARGET" \
+       > "$LOG_DIR/rebuild-gen-snapshot.log" 2>&1; then
+    echo "FEHLGESCHLAGEN - siehe $LOG_DIR/rebuild-gen-snapshot.log"
+    grep -E "error:" "$LOG_DIR/rebuild-gen-snapshot.log" | head -10
+    exit 1
+  fi
+else
+  if ! bash "$REPO/scripts/build-horizon.sh" "$GEN_SNAPSHOT_TARGET" \
+       > "$LOG_DIR/rebuild-gen-snapshot.log" 2>&1; then
+    echo "FEHLGESCHLAGEN - siehe $LOG_DIR/rebuild-gen-snapshot.log"
+    grep -E "error:" "$LOG_DIR/rebuild-gen-snapshot.log" | head -10
+    exit 1
+  fi
 fi
 tail -1 "$LOG_DIR/rebuild-gen-snapshot.log"
 
@@ -52,7 +85,7 @@ if [ ! -x "$GEN_SNAPSHOT" ]; then
   exit 1
 fi
 if [ ! -f "$GENERATED/app.dill" ]; then
-  echo "FEHLER: $GENERATED/app.dill fehlt - erst scripts/build-ui-app.ps1 laufen lassen"
+  echo "FEHLER: $GENERATED/app.dill fehlt - erst scripts/build-dart-app.sh --project examples/$EXAMPLE/dart laufen lassen"
   exit 1
 fi
 # In eine Nebendatei schreiben und erst danach umbenennen: Bricht gen_snapshot

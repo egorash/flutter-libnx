@@ -124,6 +124,25 @@
 - Строка 8: `TAR="/mnt/e/make.tar"`.
 - Строка 16: `cp -a .../usr/bin/make` — Linux ELF.
 
+### macOS-обновление контрактов (Этап 7)
+
+- **`rebuild-all.sh`** — определяется платформа (`uname -s`). Host-`gen_snapshot`
+  выбирается по host-тулчейну: `clang_arm64/gen_snapshot_product` на Darwin,
+  `clang_x64/gen_snapshot_product` на Linux. На Darwin шаг 1 вызывается
+  напрямую через `ninja` (с `depot_tools` в `PATH` ради `vpython3`), а не
+  через `build-horizon.sh`; шаг 2 (`flutter_engine_static`) — через
+  `build-horizon.sh` в обоих случаях. `REPO` берётся из расположения скрипта;
+  подсказка указывает на `build-dart-app.sh` (вместо `.ps1`).
+- **`build-dart-app.sh`** — раскрытие массива `defines` защищено
+  (`${defines[@]+...}`), иначе пустой массив под `set -u` роняет kernel-шаг.
+- **`patch-engine-horizon.py` (macOS-хост)** — пиновый `buildtools`-clang
+  старше SDK 27. Для host-тулчейна (`current_os == mac`) патчер снимает
+  `-Werror` (`-Wno-error`) в `build/config/compiler/BUILD.gn`; Horizon-кросс
+  и так без `-Werror`. Дополняет `-fuse-ld=<Xcode ld>` для mac-линкера.
+- **`relink-example.sh` / `build-example-wsl.sh`** — контракт не меняется:
+  `build-example-wsl.sh` уже платформо-нейтрален (задаёт devkitPro и `make`),
+  поэтому на macOS вызывается как есть.
+
 ---
 
 ## 2. PowerShell (порт на bash) и Python (14)
