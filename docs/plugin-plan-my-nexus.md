@@ -1,6 +1,10 @@
 # План: плагины для приложения `my_nexus`
 
-Статус: черновик плана. Дата: 2026-10-10.
+Статус: актуальный план. Дата: 2026-10-11.
+Обновления: Фаза 0 частично пройдена на железе (старт/логин работают);
+`app_links` **пропущен** (ошибка ловится приложением, deep links не
+используются); приоритеты смещены на остальные плагины; null-check
+исключение после логина — баг в коде приложения, не плагин.
 
 Дополняет `docs/target-apps.md` (общая классификация A–D) — здесь конкретный,
 приоритизированный план для реального приложения `my_nexus`
@@ -54,7 +58,7 @@
 | `shared_preferences` | ✅ | — | `auth_service`, `colors.dart`, `user_session_store` | старт |
 | `hive` / `hive_flutter` | pure Dart | через `path_provider` | `main.dart`, `cache_metadata*` | старт |
 | `url_launcher` | 6.3.2 | `plugins.flutter.io/url_launcher` | `note_video_section`, `social_row`, `track_button`, `travel_points_list`, `link_card` | по действию |
-| `app_links` | 6.4.1 | `com.llfbandit.app_links/messages` + `/events` | `deep_link_service.dart` | **старт** (ошибка ловится) |
+| `app_links` | 6.4.1 | `com.llfbandit.app_links/messages` + `/events` | `deep_link_service.dart` | **старт — пропущен** (ошибка ловится, см. Фазу 1) |
 | `geolocator` | 14.x | `flutter.baseflow.com/geolocator` (+ `..._updates`, `..._service_updates`) | `travels_map_controller.dart` | лениво (карта) |
 | `image_picker` | 1.2.3 | Pigeon; hook `ImagePickerPlatform.instance` | `packages/strapi_media/.../strapi_media_client.dart` | лениво (фото) |
 | `image_cropper` | 12.2.1 | hook `ImageCropperPlatform.instance` | `packages/strapi_media/.../image_editor.dart` | лениво (кроп) |
@@ -69,6 +73,14 @@
 `hive` (уже покрыты) и на `app_links` (ошибка `getInitialLink` и
 `uriLinkStream` ловится в `try/catch` / `onError`, только лог). То есть
 **приложение, вероятно, уже стартует** — падения будут точечные, в фичах.
+
+**Подтверждено на железе (2026-10-10/11, итог Фазы 0):** приложение
+стартует, сплэш и UI работают (60 fps), авторизация проходит (после
+точечного TLS-обхода для `*.my-nexus.ru` — см. `docs/horizon-tls-roots.md`).
+В SD-логе единственный плагинный шум — `com.llfbandit.app_links/events`
+(`MissingPluginException` на `listen`), ловится приложением. Отдельно
+поймано Dart-исключение «Null check operator used on a null value» на пути
+после логина — это **не плагин**, а баг в коде `my_nexus`.
 
 ---
 
@@ -98,79 +110,98 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 
 ## 4. Фазы
 
-### Фаза 0 — диагностика на железе (предусловие)
-1. `scripts/nxlink-upload.sh --switch-ip <ip> --example my_nexus`.
-2. `scripts/log-listener.sh` — поймать реальный вывод.
-3. Зафиксировать: стартует ли UI; какие `MissingPluginException` /
-   `PlatformException` реально прилетают и на каком экране.
+### Фаза 0 — диагностика на железе (частично выполнена 2026-10-10/11)
 
-**Критерий:** список фактически дергаемых каналов и точка первого падения.
-Это уточняет приоритеты ниже (возможно, `connectivity_plus` не понадобится
-вообще).
+Итог на консоли (сборка `examples/my_nexus/my_nexus.nro`, режим приложения):
 
-### Фаза 1 — старт-критичное, тривиально (низкий риск)
-1. **`app_links`** — хендлер A на оба канала:
-   - `com.llfbandit.app_links/messages`: `getInitialLink`/`getLatestLink` →
-     `null`, `success` (Standard).
-   - `com.llfbandit.app_links/events`: EventChannel — отвечать `success` на
-     `listen`/`cancel`, события не шлём.
-   Цель: убрать шум в логе и «неопределённое» поведение стрима.
-2. **`connectivity_plus` / `package_info_plus`** — только если Фаза 0
-   показала вызовы. `connectivity`: `check` → `['none']`/`wifi`;
-   `package_info`: `getAll`/`get` → значения из NACP/констант.
+- Старт, сплэш, UI — работают (60 fps); авторизация проходит после
+  точечного TLS-обхода для `*.my-nexus.ru` (см. `docs/horizon-tls-roots.md`).
+- Единственный плагинный шум в SD-логе — `com.llfbandit.app_links/events`
+  (`MissingPluginException` на `listen`); приложение ловит, не фатально.
+- `path_provider`/`shared_preferences`/`hive` на старте работают
+  (Hive-кэш и хранилища инициализируются).
+- Поймано Dart-исключение «Null check operator used on a null value» после
+  логина — баг в коде `my_nexus`, не плагин; разбирается отдельно.
+- **Не проверено на железе:** карта, фото, web-view, внешние ссылки.
+  Это продолжение Фазы 0: перед реализацией каждого элемента Фазы 3 —
+  сначала прогнать сценарий на текущей сборке и зафиксировать реальные
+  каналы/исключения.
 
-**Критерий:** чистый лог на старте, оффлайн-сценарий не падает.
+### Фаза 1 — инфраструктура эмбеддера + скипы
 
-### Фаза 2 — app-агностичный охват (высокий приоритет)
-3. **`url_launcher`** — уже есть; **проверить под 6.3.2**:
-   - `canLaunch` args `{url}`, `launch` args `{url, useSafariVC, useWebView,
-     enableJavaScript, enableDomStorage, universalLinksOnly, headers}` →
-     `bool`; `closeWebView` → void. Реализация через системный браузер-апплет
-     (`webPageCreate`+`webConfigShow`), только `http`/`https`.
-   - Приложение вызывает `launchUrl(uri, mode: externalApplication)` и
-     `url_launcher_string` — покрыть оба пути (метод на канале один и тот же).
-   **Критерий:** клик по ссылке открывает системный браузер; `mailto:`/`tel:`
-   отвечают `false` (честно).
+1. **Инфраструктура (обязательно перед любым новым хендлером):**
+   - Реестр каналов: вынести «канал → хендлер» из `if`-цепочек
+     `plugins_horizon.cpp` в map — добавление плагина одной строкой.
+   - EventChannel-помощник: общий ответ `success` на `listen`/`cancel`
+     (Standard-кодек), чтобы стримы плагинов не сыпали ошибками
+     (сейчас ни один EventChannel не обслуживается).
+2. **`app_links` — ПРОПУЩЕН (решение 2026-10-11).** Ошибка ловится
+   приложением (`try/catch` + `onError`), deep links не используются; upstream
+   относит `app_links` к плагинам без осмысленной Switch-аналогии (группа C,
+   `docs/target-apps.md`). Вернуться при появлении реальных deep-link фич
+   (тогда: `getInitialLink`/`getLatestLink` → `null`, EventChannel → `success`
+   без событий).
+3. **`connectivity_plus` / `package_info_plus` — игнор (принцип C).**
+   Прямых вызовов в коде нет, Фаза 0 вызовы не показала. Делать, только
+   если повторится иначе.
 
-### Фаза 3 — фичи `my_nexus`
-4. **`webview_flutter`** — webview как встроенного виджета на Switch нет
-   (системный браузер — отдельный апплет, см. `target-apps.md`). Варианты:
-   - (3a) Dart-шim B: `WebViewPlatform.instance` — реализация, которая при
-     создании контроллера открывает URL системным браузером (через наш
-     url_launcher) и рисует заглушку-widget. Экраны `note_music_section`/
-     `track_section` не падают.
-   - (3b) честная ошибка: `WebViewController()` возвращает `PlatformException`
-     «WebView nicht unterstützt» — если приложение умеет это показать.
-   **Критерий:** открытие заметки с музыкой/треком не крашит приложение.
+**Критерий:** в эмбеддере есть реестр каналов и EventChannel-помощник;
+стартовый лог без `MissingPluginException` от скипнутых плагинов (они не
+дергаются).
 
-5. **`geolocator`** — GPS-железа нет. Хендлер A:
+### Фаза 2 — app-агностичный охват
+
+**`url_launcher`** — уже реализован; проверить на железе под 6.3.x (клик
+по внешней ссылке из приложения):
+- `canLaunch` args `{url}`, `launch` args `{url, useSafariVC, useWebView,
+  enableJavaScript, enableDomStorage, universalLinksOnly, headers}` →
+  `bool`; `closeWebView` → void. Реализация через системный браузер-апплет
+  (`webPageCreate`+`webConfigShow`), только `http`/`https`.
+- Покрыть оба пути вызова: `launchUrl(uri, mode: externalApplication)` и
+  `url_launcher_string` (метод на канале один и тот же).
+- `mailto:`/`tel:` → честный `false`.
+
+**Критерий:** клик по ссылке открывает системный браузер и возврат в
+приложение работает; формат args 6.3.x совпадает с текущим хендлером.
+
+### Фаза 3 — фичи `my_nexus` (порядок кандидатов ниже, уточняется)
+
+Приоритет по ценности для `my_nexus` (согласуется с заказчиком):
+
+1. **`geolocator`** (карта путешествий, `travels_map_controller.dart`).
+   GPS-железа нет. Хендлер A (C++) + EventChannel-помощник из Фазы 1:
    - `checkPermission`/`requestPermission` → `LocationPermission.denied`
-     (или `whileInUse`, если решим «разрешать»).
-   - `isLocationServiceEnabled` → `false`.
-   - `getCurrentPosition` → `PlatformException('denied', ...)`.
+     (или `whileInUse`, если решим «разрешать»);
+   - `isLocationServiceEnabled` → `false`;
+   - `getCurrentPosition` → `PlatformException('denied', ...)`;
    - EventChannel `geolocator_updates`/`service_updates` — `success` на
      `listen`/`cancel`, без событий.
-   Дальше решить по факту: либо приложение корректно показывает «нет
-   геолокации», либо (опция) отдавать фиксированную/ручную позицию.
-   **Критерий:** экран карты не крашит; отсутствие GPS отображается понятно.
-
-6. **`image_picker` + `image_cropper`** (`strapi_media`: загрузка/кроп фото) —
-   камеры нет; на Switch уже есть конвенция «import-папка» (как `file_picker`).
-   Варианты:
-   - (6a) Dart-шim B: `ImagePickerPlatform.instance` → реализация, берущая
-     файл из `/switch/flutter_apps/<id>/import/` (через наш канал/`file_picker`);
-     `ImageCropperPlatform.instance` → no-op, возвращающий исходный файл.
+   Критерий: экран карты не крашит; отсутствие GPS показано понятно.
+2. **`image_picker` + `image_cropper`** (фото в визарде, `strapi_media`).
+   Камеры нет; конвенция «import-папка» (как `file_picker`):
+   `sdmc:/switch/flutter_apps/my_nexus/import/`.
+   - (6a) Dart-шim B: `ImagePickerPlatform.instance` → берёт файл из
+     import-папки; `ImageCropperPlatform.instance` → no-op (исходный файл).
    - (6b) честная ошибка `PlatformException('unimplemented')`.
-   **Критерий:** добавление фото либо работает через import-папку, либо
+   Критерий: добавление фото либо работает через import-папку, либо
    показывает понятную ошибку, не роняя визард.
+3. **`webview_flutter`** (музыкальные заметки, `note_music_section.dart`).
+   Встроенного web-view на Switch нет (системный браузер — отдельный
+   апплет, `docs/target-apps.md`). Варианты:
+   - (3a) Dart-шim B: `WebViewPlatform.instance` — открывать URL системным
+     браузером (через наш `url_launcher`) + заглушка-widget;
+   - (3b) честная ошибка: `WebViewController()` → `PlatformException` —
+     дешевле и честнее (Pigeon-API webview объёмное).
+   Критерий: открытие заметки с музыкой/треком не крашит приложение.
+
+**Критерий:** карта, фото и музыкальные заметки не роняют приложение;
+неподдерживаемое показывается явной ошибкой.
 
 ### Фаза 4 — вне области (фиксируем явно)
 - Реальный встроенный WebView (нет движка как view).
 - Камера, GPS-железо, биометрия.
 - Видео: не для `my_nexus` (media_kit в нём не используется), общая тема
   отдельно в `target-apps.md`.
-
----
 
 ## 5. Общая инфраструктура (по ходу)
 
@@ -198,6 +229,7 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 - Железо: `nxlink-upload.sh` + `log-listener.sh`.
 - Чек-лист сценариев: старт/сплэш/логин → домашний экран → карта без GPS →
   заметка с web-view → визард с фото → открытие внешней ссылки.
+  (сценарий `app_links` снят — плагин пропущен)
 - Регресс `ui_app` и `aot_poc` после правок эмбеддера.
 
 ---
@@ -207,8 +239,8 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 1. **Версии протоколов.** `url_launcher` 6.x, `image_picker` Pigeon — форматы
    проверять по `~/.pub-cache`, а не по памяти. Хрупкость Dart-шимов (B)
    к смене версии platform-interface.
-2. **app_links на старте.** Возможно, ошибку уже ловит приложение, и Фаза 1
-   не обязательна — решит Фаза 0.
+2. **app_links** — пропущен (решение 2026-10-11): ошибка ловится
+   приложением, deep links не используются; вернуться при появлении фичи.
 3. **`WebViewPlatform` API объёмный** (Pigeon, много методов) — шим B может
    быть нетривиальным; возможно, дешевле честная ошибка (3b).
 4. **`strapi_media`** — локальный пакет; при Dart-шимах убедиться, что его

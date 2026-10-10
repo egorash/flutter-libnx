@@ -173,6 +173,15 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 **Критерий приёмки:** `build-dart-app.sh --project ./examples/ui_app` даёт те же
 артефакты, что PS-версия; nxlink/log-listener работают с понятными ошибками.
 
+> **Итог (выполнено):** порт завершён. Ключевые скрипты:
+> `build-dart-app.sh` (`flutter build bundle` → kernel → Horizon-регистрант
+> `examples/<app>/generated/horizon_main.dart` → копирование ассетов),
+> `nxlink-upload.sh`, `log-listener.sh` (netcat, ветвление macOS/Linux).
+> Оригинальные `.ps1` переименованы в `.ps1.bak`. Параллельно появились:
+> `setup-macos.sh`, `install-devkitpro-macos.sh`, `install-portlibs-macos.sh` и
+> GN-фикс OpenGL (`gn-gen-horizon.sh`, `shell_enable_gl=true`, коммит `83b3f13`).
+> Контракты скриптов — `docs/macos-migration.md`.
+
 **Зависимости:** Этап 3, Этап 5.
 
 ---
@@ -273,8 +282,15 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
 - [x] Этап 2. Установка окружения
 - [x] Этап 3. Проверка `.sh`
 - [x] Этап 4. Engine checkout
-- [ ] Этап 5. Сборка движка и sqlite3
-- [ ] Этап 6. Порт PS → bash
-- [ ] Этап 7. Сборка до `.nro`
-- [ ] Этап 8. Документация
-- [ ] Этап 9. Smoke-тест и CI
+- [x] Этап 5. Сборка движка и sqlite3
+- [x] Этап 6. Порт PS → bash
+- [x] Этап 7. Сборка до `.nro` (в т.ч. `examples/my_nexus`)
+- [~] Этап 8. Документация — частично: `docs/macos-migration.md`,
+      `docs/horizon-tls-roots.md`, `docs/plugin-plan-my-nexus.md` ведутся
+      по ходу; README macOS-секция и CONTRIBUTING — TODO
+- [ ] Этап 9. Smoke-тест и CI — тесты на железе идут по факту
+      (`my_nexus`: UI, логин); полный прогон «с нуля» и
+      `.github/workflows/build-macos.yml` — TODO
+
+Полевые находки вне этапов (TLS-корни, плагины приложения): см.
+`docs/horizon-tls-roots.md` и `docs/plugin-plan-my-nexus.md`.
