@@ -67,6 +67,13 @@ Switch — на macOS (Apple Silicon arm64), без Windows и WSL2.
    `devkitpro-pacman-installer.pkg`, затем `dkp-pacman -Syu` и
    `dkp-pacman -S --needed switch-dev`. Это macOS-замена Debian-скрипта
    `scripts/setup-devkitpro.sh`.
+2a. Портлибы (для `ui_app` и подобных): `sudo scripts/install-portlibs-macos.sh`.
+   Группа `switch-dev` — это только тулчейн (7 пакетов, без портлибов), а
+   `ui_app` линкуется с Mesa/EGL, libmpv/FFmpeg, SDL2 и т.д. Скрипт ставит
+   нужный набор из группы `switch-portlibs` (зависимости pacman тянет сам).
+   Из-за сломанного `gnupg` (нет `gpg` на arm64) каждый запрос к базе падает
+   с `GPGME error: Invalid crypto engine`, поэтому pacman запускается с
+   копией `pacman.conf`, где `SigLevel = Never`; серверы не меняются.
 3. depot_tools: клон в `~/depot_tools` (если нет).
 4. Flutter **3.41.6**: клон `-b 3.41.6` в `~/flutter-3.41.6` (если нет).
 5. Файл окружения `env.sh` в корне репо (не трогает `~/.zshrc`):

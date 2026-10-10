@@ -126,6 +126,15 @@
 
 ### macOS-обновление контрактов (Этап 7)
 
+- **`install-portlibs-macos.sh`** (новый) — ставит портлибы, нужные `ui_app`
+  (`switch-mesa`, `switch-libdrm_nouveau`, `switch-libmpv`, `switch-ffmpeg`,
+  `switch-libass`, `switch-libfribidi`, `switch-libplacebo`, `switch-dav1d`,
+  `switch-libarchive`, `switch-libzstd`, `switch-sdl2`, `switch-bzip2`,
+  `switch-liblzma`, `switch-zlib`), из группы `switch-portlibs`. Запуск через
+  `sudo`, идемпотентен (`--needed`). Обходит сломанный gpg (нет `gpg` на
+  macOS arm64) копией `pacman.conf` с `SigLevel = Never`. Дополняет
+  `install-devkitpro-macos.sh`, который ставит только группу `switch-dev`.
+
 - **`rebuild-all.sh`** — определяется платформа (`uname -s`). Host-`gen_snapshot`
   выбирается по host-тулчейну: `clang_arm64/gen_snapshot_product` на Darwin,
   `clang_x64/gen_snapshot_product` на Linux. На Darwin шаг 1 вызывается
