@@ -9,6 +9,8 @@
 # erste Schicht, die überhaupt Horizon-spezifisch werden kann.
 set -euo pipefail
 
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 OUT="${OUT:-out/horizon_release_arm64}"
 # Ninja kennt keine GN-Labels mit fuehrendem //, sondern Pfade relativ zum

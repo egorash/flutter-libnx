@@ -10,7 +10,8 @@ set -euo pipefail
 
 EXAMPLE="${1:-engine_link_test}"
 shift || true   # der Rest geht an make weiter, der Name nicht
-REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 export DEVKITA64="$DEVKITPRO/devkitA64"
@@ -18,6 +19,9 @@ export DEVKITA64="$DEVKITPRO/devkitA64"
 export PATH="$HOME/bin:$DEVKITPRO/tools/bin:$DEVKITA64/bin:$PATH"
 export ENGINE_SRC="${ENGINE_SRC:-$HOME/engine/flutter/engine/src}"
 export ENGINE_OUT="${ENGINE_OUT:-$ENGINE_SRC/out/horizon_release_arm64}"
+
+require_cmd make "Xcode CLT (xcode-select --install) oder ~/bin (extract-make.sh)"
+require_cmd pkg-config "x86_64- bzw. macOS-pkg-config (siehe extract-pkgconf.sh)"
 
 cd "$REPO/examples/$EXAMPLE"
 echo "==> make in $(pwd)"

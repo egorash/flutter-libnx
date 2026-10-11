@@ -12,7 +12,9 @@
 # der Flutter-eigenen Plattform-Dill (flutter_patched_sdk_product).
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+root="$REPO"
 flutter="${FLUTTER_HOME:-$HOME/flutter-3.41.6}"
 sdk="$flutter/bin/cache/dart-sdk"
 engine="$flutter/bin/cache/artifacts/engine"

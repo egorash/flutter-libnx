@@ -17,7 +17,9 @@ set -euo pipefail
 workdir="$1"
 shift
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+root="$REPO"
 DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
 

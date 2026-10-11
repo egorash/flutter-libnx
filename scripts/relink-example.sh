@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
-REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+set -euo pipefail
+
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Erzwingt einen Neulink des Beispiels und fasst das Ergebnis zusammen.
 # Das Makefile kennt libflutter_engine.a nicht als Abhaengigkeit, deshalb muss
 # die ELF weg, damit ueberhaupt neu gelinkt wird.
-set -uo pipefail
 EX="${1:-engine_link_test}"
 D="$REPO/examples/$EX"
 # Nicht nach /tmp: Wird die WSL-Instanz zwischen zwei Aufrufen beendet, ist das
@@ -14,8 +15,13 @@ LOG="$REPO/build-logs/link-$EX.log"
 mkdir -p "$(dirname "$LOG")"
 
 rm -f "$D/$EX.elf"
-bash $REPO/scripts/build-example-wsl.sh "$EX" > "$LOG" 2>&1
-BUILD_RC=$?
+# set -e: Ein Fehlschlag des Builds ist hier ein erwarteter Fall (RC wird unten
+# ausgewertet), deshalb if/else statt nacktem Aufruf.
+if bash "$REPO/scripts/build-example-wsl.sh" "$EX" > "$LOG" 2>&1; then
+  BUILD_RC=0
+else
+  BUILD_RC=$?
+fi
 
 # Erst prüfen, ob überhaupt gelinkt wurde. Ein leeres Protokoll und ein
 # fehlerfreies sehen bei einer reinen Symbolzählung gleich aus.
@@ -41,8 +47,10 @@ fi
 
 echo "=== undefinierte Symbole"
 MISSING="$(dirname "$LOG")/missing-$EX.txt"
+# Leerer Treffer ist normal (Link sauber) - deshalb || true unter set -e.
 grep -o "undefined reference to \`[^']*'" "$LOG" \
-  | sed "s/undefined reference to \`//; s/'$//" | sort -u > "$MISSING"
+  | sed "s/undefined reference to \`//; s/'$//" | sort -u > "$MISSING" \
+  || true
 COUNT=$(wc -l < "$MISSING")
 echo "  $COUNT"
 [ "$COUNT" -gt 0 ] && head -15 "$MISSING" | sed 's/^/    /'
@@ -56,7 +64,8 @@ DUP=$(grep -c "multiple definition of" "$LOG" || true)
 echo "  $DUP"
 if [ "$DUP" -gt 0 ]; then
   grep -o "multiple definition of \`[^']*'" "$LOG" \
-    | sed "s/multiple definition of \`//; s/'$//" | sort -u | sed 's/^/    /'
+    | sed "s/multiple definition of \`//; s/'$//" | sort -u | sed 's/^/    /' \
+    || true
 fi
 
 echo

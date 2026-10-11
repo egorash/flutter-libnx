@@ -5,10 +5,15 @@
 # macOS-Port von scripts/fetch-reference.ps1 (curl statt Invoke-WebRequest).
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+root="$REPO"
 flutter_rev='db50e20168db8fee486b9abf32fc912de3bc5b6a'
 # Passend zur libnx-Version im Container-Image devkitpro/devkita64 (4.12.0-1).
 libnx_rev='v4.12.0'
+
+require_cmd curl "curl ist Teil von macOS"
+require_cmd git "git muss installiert sein"
 
 mkdir -p "$root/third_party/reference"
 

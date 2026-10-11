@@ -13,7 +13,9 @@
 # sie, und der eigentliche Upload laeuft ins Leere.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+root="$REPO"
 DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 nxlink="${NXLINK:-$DEVKITPRO/tools/bin/nxlink}"
 
@@ -38,10 +40,7 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$switch_ip" ] || usage
-[ -x "$nxlink" ] || {
-  echo "nxlink nicht gefunden: $nxlink (devkitPro-Tools, siehe scripts/install-devkitpro-macos.sh)" >&2
-  exit 1
-}
+[ -x "$nxlink" ] || die "nxlink nicht gefunden: $nxlink (devkitPro-Tools, siehe scripts/install-devkitpro-macos.sh)"
 
 nro="$root/examples/$example/$example.nro"
 if [ ! -f "$nro" ]; then
