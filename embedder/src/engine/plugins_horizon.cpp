@@ -338,6 +338,87 @@ bool HandleUrlLauncher(FLUTTER_API_SYMBOL(FlutterEngine) engine,
   return false;
 }
 
+// --- geolocator -------------------------------------------------------------
+//
+// Die Konsole hat kein Ortungssystem (kein GPS, kein Netzortung) - geolocator
+// (14.x, Kanal flutter.baseflow.com/geolocator, StandardMethodCodec)
+// antwortet daher ehrlich "denied". getCurrentPosition erreicht die App auf
+// diesem Weg nie: Bei denied steigt travels_map_controller still aus
+// (_getCurrentLocation -> requestPermission -> denied -> return), die Karte
+// bleibt im Standardzentrum. Andere Aufrufer bekommen die explizite
+// PERMISSION_DENIED-Exception.
+//
+// Die beiden Event-Kanaele (_updates, _service_updates) quittieren listen/
+// cancel mit Erfolg, senden aber nie Ereignisse - es gibt keinen Dienst,
+// der sie speisen koennte.
+//
+// Permission-Codes (geolocator_platform_interface 4.2.8,
+// IntegerExtensions.toLocationPermission): 0=denied, 1=deniedForever,
+// 2=whileInUse, 3=always.
+
+bool HandleGeolocatorEventChannel(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                  const FlutterPlatformMessage* message) {
+  std::string method;
+  StdValue args;
+  if (!DecodeStdMethodCall(message->message, message->message_size, &method,
+                           &args)) {
+    return false;
+  }
+  // listen/cancel sind das gesamte EventChannel-Protokoll.
+  if (method == "listen" || method == "cancel") {
+    Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
+    return true;
+  }
+  return false;
+}
+
+bool HandleGeolocator(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                      const FlutterPlatformMessage* message,
+                      const std::string& method,
+                      const StdValue& args) {
+  if (method == "checkPermission" || method == "requestPermission") {
+    // Kein GPS: ehrlich "denied" (0). Die App fragt daraufhin nicht weiter.
+    Respond(engine, message, EncodeStdSuccess(StdValue::Int(0)));
+    return true;
+  }
+  if (method == "isLocationServiceEnabled") {
+    Respond(engine, message, EncodeStdSuccess(StdValue::Bool(false)));
+    return true;
+  }
+  if (method == "getLastKnownPosition") {
+    // Es gibt keine bekannte Position - null ist die ehrliche Antwort.
+    Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
+    return true;
+  }
+  if (method == "getLocationAccuracy") {
+    // LocationAccuracyStatus.values[0] == reduced; ohne Hardware der einzige
+    // nicht-werfende int (der Dart-Code indiziert das Enum direkt).
+    Respond(engine, message, EncodeStdSuccess(StdValue::Int(0)));
+    return true;
+  }
+  if (method == "getCurrentPosition") {
+    Respond(engine, message,
+            EncodeStdError("PERMISSION_DENIED",
+                           "Switch hat kein Ortungssystem (geolocator)"));
+    return true;
+  }
+  if (method == "openAppSettings" || method == "openLocationSettings") {
+    // Es gibt keine Ortungseinstellungen zum Oeffnen.
+    Respond(engine, message, EncodeStdSuccess(StdValue::Bool(false)));
+    return true;
+  }
+  if (method == "requestTemporaryFullAccuracy") {
+    // iOS-only-Konzept, hier nicht existent.
+    Respond(engine, message,
+            EncodeStdError("unimplemented", "requestTemporaryFullAccuracy ist "
+                                             "auf Horizon nicht verfuegbar"));
+    return true;
+  }
+
+  LOG_WARN("geolocator: unbekannte Methode '%s'", method.c_str());
+  return false;
+}
+
 // --- flutter_secure_storage -------------------------------------------------
 //
 // EHRLICHKEITSHINWEIS: "Secure" ist auf dieser Plattform nicht leistbar.
@@ -659,6 +740,15 @@ extern "C" bool flutter_libnx_handle_plugin_message(
     return HandleFilePicker(engine, message);
   }
 
+  // geolocator-EventKanaele (Positions-/Dienststatus-Strom): nur listen/cancel
+  // quittieren, Ereignisse kommen nie (kein Ortungssystem).
+  if (strcmp(message->channel, "flutter.baseflow.com/geolocator_updates") ==
+          0 ||
+      strcmp(message->channel,
+             "flutter.baseflow.com/geolocator_service_updates") == 0) {
+    return HandleGeolocatorEventChannel(engine, message);
+  }
+
   const bool is_path_provider =
       strcmp(message->channel, "plugins.flutter.io/path_provider") == 0;
   const bool is_shared_preferences =
@@ -668,8 +758,10 @@ extern "C" bool flutter_libnx_handle_plugin_message(
              "plugins.it_nomads.com/flutter_secure_storage") == 0;
   const bool is_url_launcher =
       strcmp(message->channel, "plugins.flutter.io/url_launcher") == 0;
+  const bool is_geolocator =
+      strcmp(message->channel, "flutter.baseflow.com/geolocator") == 0;
   if (!is_path_provider && !is_shared_preferences && !is_secure_storage &&
-      !is_url_launcher) {
+      !is_url_launcher && !is_geolocator) {
     // Diagnose (Phase 0): unbekannte Kanäle beim ersten Auftreten melden,
     // damit im Log sichtbar wird, welche Kanäle die App wirklich anspricht.
     static std::set<std::string> g_logged_unknown_channels;
@@ -697,6 +789,9 @@ extern "C" bool flutter_libnx_handle_plugin_message(
   }
   if (is_url_launcher) {
     return HandleUrlLauncher(engine, message, method, args);
+  }
+  if (is_geolocator) {
+    return HandleGeolocator(engine, message, method, args);
   }
   return HandleSharedPreferences(engine, message, method, args);
 }
