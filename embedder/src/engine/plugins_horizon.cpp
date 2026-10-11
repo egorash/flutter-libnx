@@ -726,6 +726,100 @@ bool HandleFilePicker(FLUTTER_API_SYMBOL(FlutterEngine) engine,
   return true;
 }
 
+// --- image_picker -----------------------------------------------------------
+//
+// Kanal plugins.flutter.io/image_picker (StandardMethodCodec). Die App ruft
+// (MediaPickerSheet -> pickFromDevice) pickImage mit source gallery|camera:
+// Kamera gibt es nicht, "Galerie" ist wie bei file_picker der Import-Ordner
+// /switch/flutter_apps/<app-id>/import/ - geliefert wird der Pfad der
+// neuesten Bilddatei. Leerer Ordner oder Kamera -> null, der normale
+// "Abgebrochen"-Fall des Protokolls, den der Wizard sauber verarbeitet
+// (navigator.pop(null)). Eine PlatformException waere hier gefaehrlich:
+// MediaPickerSheet faengt nichts (nur try/finally) - der Fehler wuerde den
+// Assistenten zerlegen. Deshalb: nie werfen, immer null oder Pfad.
+//
+// Bildformate: jpg, jpeg, png, gif, webp, bmp.
+
+std::string NewestImportFor(const std::vector<std::string>& extensions) {
+  EnsureDir(ImportDir());
+  DIR* dir = opendir(ImportDir().c_str());
+  if (dir == nullptr) {
+    return "";
+  }
+  std::string best;
+  int64_t best_mtime = -1;
+  while (dirent* entry = readdir(dir)) {
+    const std::string name = entry->d_name;
+    if (name == "." || name == "..") {
+      continue;
+    }
+    if (!HasAllowedExtension(name, extensions)) {
+      continue;
+    }
+    struct stat st = {};
+    const std::string full = ImportDir() + "/" + name;
+    if (stat(full.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+      continue;
+    }
+    if (st.st_mtime > best_mtime) {
+      best_mtime = static_cast<int64_t>(st.st_mtime);
+      best = full;
+    }
+  }
+  closedir(dir);
+  return best;
+}
+
+bool HandleImagePicker(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                       const FlutterPlatformMessage* message,
+                       const std::string& method,
+                       const StdValue& args) {
+  if (method == "pickImage" || method == "pickMultiImage") {
+    const StdValue* source = MapGet(args, "source");
+    const bool camera = source != nullptr &&
+                        source->type == StdValue::Type::kString &&
+                        source->as_string == "camera";
+    if (camera) {
+      LOG_WARN("image_picker: Kamera gibt es auf der Konsole nicht -> null");
+      Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
+      return true;
+    }
+    static const std::vector<std::string> kImageExt = {
+        "jpg", "jpeg", "png", "gif", "webp", "bmp"};
+    const std::string path = NewestImportFor(kImageExt);
+    if (path.empty()) {
+      LOG_INFO("image_picker: keine Bilder in %s - dorthin kopieren",
+               ImportDir().c_str());
+      Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
+      return true;
+    }
+    if (method == "pickImage") {
+      LOG_INFO("image_picker: liefere %s", path.c_str());
+      Respond(engine, message, EncodeStdSuccess(StdValue::String(path)));
+      return true;
+    }
+    // pickMultiImage: Die App nutzt nur pickImage; die Liste bekommt
+    // trotzdem den neuesten Eintrag statt eines leeren Ergebnisses.
+    StdValue list = StdValue::List();
+    list.as_list.push_back(StdValue::String(path));
+    Respond(engine, message, EncodeStdSuccess(list));
+    return true;
+  }
+  if (method == "pickVideo" || method == "pickMedia") {
+    // Video/Media-Container gibt es nicht (keine eigenen Screens) - null.
+    Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
+    return true;
+  }
+  if (method == "retrieveLostData" || method == "getLostData") {
+    // Es gibt keine verlorenen Daten - null.
+    Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
+    return true;
+  }
+
+  LOG_WARN("image_picker: unbekannte Methode '%s'", method.c_str());
+  return false;
+}
+
 }  // namespace
 
 // Behandelt die Plugin-Kanäle. true heißt: beantwortet (oder bewusst der
@@ -760,8 +854,10 @@ extern "C" bool flutter_libnx_handle_plugin_message(
       strcmp(message->channel, "plugins.flutter.io/url_launcher") == 0;
   const bool is_geolocator =
       strcmp(message->channel, "flutter.baseflow.com/geolocator") == 0;
+  const bool is_image_picker =
+      strcmp(message->channel, "plugins.flutter.io/image_picker") == 0;
   if (!is_path_provider && !is_shared_preferences && !is_secure_storage &&
-      !is_url_launcher && !is_geolocator) {
+      !is_url_launcher && !is_geolocator && !is_image_picker) {
     // Diagnose (Phase 0): unbekannte Kanäle beim ersten Auftreten melden,
     // damit im Log sichtbar wird, welche Kanäle die App wirklich anspricht.
     static std::set<std::string> g_logged_unknown_channels;
@@ -792,6 +888,9 @@ extern "C" bool flutter_libnx_handle_plugin_message(
   }
   if (is_geolocator) {
     return HandleGeolocator(engine, message, method, args);
+  }
+  if (is_image_picker) {
+    return HandleImagePicker(engine, message, method, args);
   }
   return HandleSharedPreferences(engine, message, method, args);
 }
