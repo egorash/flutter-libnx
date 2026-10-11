@@ -123,7 +123,7 @@
 Задачи:
 - [x] D1. Расширить `build-dart-app.sh`: детект `image_picker/image_cropper/webview_flutter`
 - [x] D2. Генерация `horizon_main.dart` с учётом списка детектов (без ломки file_picker)
-- [ ] E1. Шаблон `plugin_template/` (C++ + реестр + Dart-шим-заготовка)
+- [x] E1. Шаблон `plugin_template/` (C++ + реестр + Dart-шим-заготовка)
 - F1. Единые проверки `command -v` в ключевых скриптах
 - F2. `set -euo pipefail` единообразно
 - F3. shellcheck по 2–3 критичным скриптам (`build-dart-app.sh`, `rebuild-all.sh`)
@@ -155,7 +155,7 @@
 - [x] `build-dart-app.sh` детектит нужные плагины, регистрант корректен
       (Спринт 2, блок D; ветка `feat/registrant-plugins`)
 - [ ] Есть `docs/infra.md` + шаблон плагина
-      (Спринт 2–3)
+      (шаблон `plugin_template/` — Спринт 2 E1, готов; `docs/infra.md` — Спринт 3 G1)
 - [x] Критичные скрипты чище, меньше ручных проверок
       (shellcheck по build-dart-app/rebuild-all/relink-example — чисто)
 - [ ] Зафиксированы наблюдения по производительности (без «оптимизаций ради оптимизаций»)
@@ -206,3 +206,22 @@
 - Каркасы трёх шимов лежат БЕЗ маркера (не ломают рантайм my_nexus);
   image_picker на текущих версиях работает через C++-канал
   `plugins.flutter.io/image_picker` и шим не требует вовсе.
+
+## Дополнение: шаблон плагина (Спринт 2 E1, добавлено 2026-10-11)
+
+Ветка `feat/plugin-template`. Собираемый пример-цель
+`examples/plugin_template/` (минимальный вариант `my_nexus`):
+
+- `Makefile` — копия `ui_app`, только `TARGET`/`APP_TITLE`;
+- `source/main.cpp` — симлинк на общий раннер `examples/ui_app/source/main.cpp`;
+- `source/handler_stub.cpp` — компилируемый C++-референс хендлера
+  (`plugins.flutter.io/plugin_template`, StandardMethodCodec); инертен:
+  в `.elf` не линкуется, пока не подключён через реестр;
+- `dart/` — минимальный пакет: демо-кнопка вызывает канал и честно
+  показывает `MissingPluginException` (ожидаемое поведение до подключения);
+- `README.md` — чеклист подключения плагина: путь A (C++-хендлер +
+  одна строка в `MakeRegistry()` у `plugins_horizon.cpp`) и путь B
+  (Dart-шим в `dart_helpers/horizon_plugins/` с маркером из D).
+
+Сборка зелёная: `build-dart-app.sh --example plugin_template` +
+`rebuild-all.sh plugin_template` → `plugin_template.nro`.

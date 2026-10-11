@@ -191,6 +191,18 @@
   (`examples/ui_app/source/main.cpp`): от неё зависят путь лога
   (`sdmc:/switch/flutter-libnx/<id>.log`) и текст `LOG_INFO`. Цепочка:
   `build-dart-app.sh --example my_nexus --project <путь> && rebuild-all.sh my_nexus`.
+- **`examples/plugin_template`** (новый пример-цель, Спринт 2 E1) — собираемый
+  шаблон для добавления плагинов: `Makefile` — копия `ui_app` с
+  `TARGET=plugin_template`; `source/main.cpp` — **симлинк** на общий раннер
+  `examples/ui_app/source/main.cpp` (как у `my_nexus`); дополнительно в
+  `source/` лежит `handler_stub.cpp` — C++-референс хендлера
+  (канал `plugins.flutter.io/plugin_template`), он компилируется в составе
+  примера, но не вызывается и в `.elf` не линкуется (подключение — через
+  реестр каналов `MakeRegistry()` в `plugins_horizon.cpp`, см. README
+  примера). `dart/` — минимальный пакет (только `pubspec.yaml` +
+  `lib/main.dart`), демо-кнопка честно показывает `MissingPluginException`,
+  пока реестр не расширен. Сборка: `build-dart-app.sh --example
+  plugin_template` && `rebuild-all.sh plugin_template`.
 - **`patch-engine-horizon.py` (macOS-хост)** — пиновый `buildtools`-clang
   старше SDK 27. Для host-тулчейна (`current_os == mac`) патчер снимает
   `-Werror` (`-Wno-error`) в `build/config/compiler/BUILD.gn`; Horizon-кросс
