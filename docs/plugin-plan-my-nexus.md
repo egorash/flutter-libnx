@@ -198,14 +198,18 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 Приоритет по ценности для `my_nexus` (согласуется с заказчиком):
 
 1. **`geolocator`** (карта путешествий, `travels_map_controller.dart`).
-   GPS-железа нет. Хендлер A (C++) + EventChannel-помощник из Фазы 1:
-   - `checkPermission`/`requestPermission` → `LocationPermission.denied`
-     (или `whileInUse`, если решим «разрешать»);
+   GPS-железа нет. **Реализовано** в эмбеддере — коммит `9f8ae8a`
+   (C++-хендлер + EventChannel-помощник):
+   - `checkPermission`/`requestPermission` → `LocationPermission.denied` (0);
    - `isLocationServiceEnabled` → `false`;
-   - `getCurrentPosition` → `PlatformException('denied', ...)`;
+   - `getCurrentPosition` → `PlatformException('PERMISSION_DENIED', ...)`;
+   - `getLastKnownPosition` → `null`, `getLocationAccuracy` → `0` (reduced),
+     `openAppSettings`/`openLocationSettings` → `false`,
+     `requestTemporaryFullAccuracy` → `unimplemented`;
    - EventChannel `geolocator_updates`/`service_updates` — `success` на
      `listen`/`cancel`, без событий.
-   Критерий: экран карты не крашит; отсутствие GPS показано понятно.
+   Проверка на железе: карта открывается, не крашит, без центровки на
+   пользователе (вместе со следующим заходом).
 2. **`image_picker` + `image_cropper`** (фото в визарде, `strapi_media`).
    Камеры нет; конвенция «import-папка» (как `file_picker`):
    `sdmc:/switch/flutter_apps/my_nexus/import/`.
