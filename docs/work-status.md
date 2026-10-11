@@ -97,7 +97,7 @@
 | `webview-flutter` | `5fcd24a` | под webview |
 | `album-picker` | `fd43560` | под браузер фото |
 
-Открыт **PR #2** (`album-picker → master`, план браузера). PR #1 влит.
+PR #2 закрыт и смержен. PR #1 влит.
 
 ---
 
