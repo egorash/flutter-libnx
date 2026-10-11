@@ -303,11 +303,20 @@ struct VirtualCursorState {
   bool pressed = false;
   uint64_t last_input_ns = 0;
   uint64_t last_frame_ns = 0;
+  uint64_t move_started_ns = 0;  // Beginn der aktuellen Stick-Bewegung (Boost)
   double sent_x = -1.0;
   double sent_y = -1.0;
 };
 
 VirtualCursorState g_vcursor;
+
+// Feinjustage des virtuellen Zeigers (C3, docs/input-icon-plan.md):
+// Totzone, Basisgeschwindigkeit und Beschleunigungsfaktor stehen bewusst als
+// Konstanten - Hardwaretests justieren nur hier, nicht mitten im Code.
+inline constexpr double kCursorDeadzone = 0.25;    // Anteil des Stickwegs
+inline constexpr double kCursorSpeedMax = 1400.0;  // px/s am Anschlag (anfangs)
+inline constexpr double kCursorBoost = 2.0;        // max. Multiplikator (x1.5 s)
+inline constexpr double kCursorBoostTime = 1.5;    // s bis zum vollen Boost
 
 // Liefert die Maske der Tasten, die SendKeyEvents ueberspringen soll.
 u64 UpdateVirtualCursor(FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -318,22 +327,52 @@ u64 UpdateVirtualCursor(FLUTTER_API_SYMBOL(FlutterEngine) engine,
       : static_cast<double>(now - g_vcursor.last_frame_ns) / 1e9;
   g_vcursor.last_frame_ns = now;
 
+  // Echter Touch gewinnt: Sobald ein Finger die Oberflaeche beruehrt, blendet
+  // der Zeiger aus (kein Doppel-Input Cursor + Touch). Waehrend eines
+  // Cursor-Drags erst sauber loslassen, damit der Touch-Device-Slot 777
+  // nicht "gedrueckt" haengen bleibt.
+  if (platform.touch_count() > 0 && (g_vcursor.active || g_vcursor.pressed)) {
+    if (g_vcursor.pressed && engine != nullptr) {
+      FlutterPointerEvent e = {};
+      e.struct_size = sizeof(FlutterPointerEvent);
+      e.phase = kUp;
+      e.timestamp = static_cast<size_t>(now / 1000);
+      e.x = g_vcursor.x;
+      e.y = g_vcursor.y;
+      e.device = 777;
+      e.device_kind = kFlutterPointerDeviceKindTouch;
+      FlutterEngineSendPointerEvent(engine, &e, 1);
+    }
+    g_vcursor.active = false;
+    g_vcursor.pressed = false;
+    g_vcursor.move_started_ns = 0;
+  }
+
   // Rechter Stick: quadratische Kennlinie (Feinsteuerung nahe der Mitte,
-  // zuegig am Anschlag), Totzone 25 %.
+  // zuegig am Anschlag), Totzone kCursorDeadzone.
   const HidAnalogStickState stick = padGetStickPos(&platform.pad(), 1);
   auto axis = [](double raw) {
     const double v = raw / 32767.0;
     const double a = v < 0 ? -v : v;
-    if (a < 0.25) {
+    if (a < kCursorDeadzone) {
       return 0.0;
     }
-    const double n = (a - 0.25) / 0.75;
+    const double n = (a - kCursorDeadzone) / (1.0 - kCursorDeadzone);
     return (v < 0 ? -1.0 : 1.0) * n * n;
   };
   const double vx = axis(stick.x);
   const double vy = axis(stick.y);
   if (vx != 0.0 || vy != 0.0) {
-    const double kSpeed = 1400.0;  // px/s am Anschlag
+    // Beschleunigung ueber die Haltedauer: nach kCursorBoostTime Sekunden
+    // volle kCursorBoost-fache Geschwindigkeit - grosse 1280x720-Flaeche
+    // ohne dauerndes Nachsetzen ueberqueren, nahe Ziele bleiben fein.
+    if (g_vcursor.move_started_ns == 0) {
+      g_vcursor.move_started_ns = now;
+    }
+    const double hold_s = static_cast<double>(now - g_vcursor.move_started_ns) / 1e9;
+    const double boost =
+        1.0 + (kCursorBoost - 1.0) * (hold_s < kCursorBoostTime ? hold_s / kCursorBoostTime : 1.0);
+    const double kSpeed = kCursorSpeedMax * boost;  // px/s
     g_vcursor.x += vx * kSpeed * dt;
     g_vcursor.y -= vy * kSpeed * dt;  // Stick +y ist oben, Bildschirm-y unten
     if (g_vcursor.x < 0) g_vcursor.x = 0;
@@ -344,6 +383,8 @@ u64 UpdateVirtualCursor(FLUTTER_API_SYMBOL(FlutterEngine) engine,
       g_vcursor.y = flutter_libnx::kDefaultHeight - 1;
     g_vcursor.active = true;
     g_vcursor.last_input_ns = now;
+  } else {
+    g_vcursor.move_started_ns = 0;
   }
 
   const u64 down = padGetButtonsDown(&platform.pad());
@@ -427,6 +468,14 @@ const ButtonKeyMap kButtonKeys[] = {
     // B ist die Abbruchtaste; Escape ist das, worauf Flutter-Anwendungen
     // für "zurück" hören.
     {HidNpadButton_B,     0x00070029, 0x0010000001b},  // Escape
+    // X als Leertaste: toggelt Checkboxes/Switches und aktiviert fokussierte
+    // Elemente dort, wo Enter eine eigene Bedeutung traegt. Die Codes sind
+    // LogicalKeyboardKey.space/physical 2c (keyboard_key.g.dart).
+    {HidNpadButton_X,     0x0007002c, 0x00000000020},  // Space
+    // Y als Tab: Springen zum naechsten Feld/Element im Fokusgraphen - der
+    // Desktop-Weg durch Formulare. Ohne Shift nur vorwaerts; zurueck geht
+    // der linker Stick / das Steuerkreuz.
+    {HidNpadButton_Y,     0x0007002b, 0x00000000009},  // Tab
     // Der linke Stick bewegt den Fokus ebenfalls – bequemer als das
     // Steuerkreuz und auf der Switch die gewohntere Bedienung.
     {HidNpadButton_StickLUp,    0x00070052, 0x00100000304},
@@ -439,8 +488,14 @@ const ButtonKeyMap kButtonKeys[] = {
 // Framework jemanden gefunden hat. Damit trennen sich drei Fälle, die von
 // außen gleich aussehen – gar nicht gesendet, gesendet aber nicht zugestellt,
 // zugestellt aber von niemandem beansprucht (etwa weil nichts den Fokus hat).
+// Handle-high = Normalbetrieb -> nur Debug; handled=0 ist die ehrliche
+// Diagnose, dass der Fokus die Taste nicht angenommen hat.
 void KeyEventCallback(bool handled, void* user_data) {
-  LOG_INFO("Tastenereignis: handled=%d", handled ? 1 : 0);
+  if (handled) {
+    LOG_DEBUG("Tastenereignis: handled=1");
+  } else {
+    LOG_INFO("Taste nicht zugestellt (handled=0) - Fokus?");
+  }
 }
 
 void SendKeyEvents(FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -503,9 +558,9 @@ void SendKeyEvents(FLUTTER_API_SYMBOL(FlutterEngine) engine,
       event.device_type = kFlutterKeyEventDeviceTypeKeyboard;
       const FlutterEngineResult sent =
           FlutterEngineSendKeyEvent(engine, &event, KeyEventCallback, nullptr);
-      LOG_INFO("Taste 0x%llx %s gesendet: %d",
-               static_cast<unsigned long long>(map.logical),
-               is_down ? "down" : "up", static_cast<int>(sent));
+      LOG_DEBUG("Taste 0x%llx %s gesendet: %d",
+                static_cast<unsigned long long>(map.logical),
+                is_down ? "down" : "up", static_cast<int>(sent));
     }
   }
 }
