@@ -1,10 +1,13 @@
 # План: плагины для приложения `my_nexus`
 
-Статус: актуальный план. Дата: 2026-10-11.
-Обновления: Фаза 0 частично пройдена на железе (старт/логин работают);
-`app_links` **пропущен** (ошибка ловится приложением, deep links не
-используются); приоритеты смещены на остальные плагины; null-check
-исключение после логина — баг в коде приложения, не плагин.
+Статус: актуальный план. Дата: 2026-10-11 (Фаза 0 полностью пройдена
+на железе; телеметрия каналов — коммит 3486f68).
+Обновления: Фаза 0 завершена полным прогоном сценариев на консоли;
+подтверждены geolocator, image_picker, app_links (дёргается на старте,
+ошибка ловится приложением); webview_flutter падает на
+`WebViewPlatform.instance` (null-check); карта не грузит плитки из-за
+DNS `errno=11` при параллельных lookup'ах; url_launcher за прогон не
+вызывался (внешние ссылки не воспроизведены, отложено).
 
 Дополняет `docs/target-apps.md` (общая классификация A–D) — здесь конкретный,
 приоритизированный план для реального приложения `my_nexus`
@@ -58,11 +61,11 @@
 | `shared_preferences` | ✅ | — | `auth_service`, `colors.dart`, `user_session_store` | старт |
 | `hive` / `hive_flutter` | pure Dart | через `path_provider` | `main.dart`, `cache_metadata*` | старт |
 | `url_launcher` | 6.3.2 | `plugins.flutter.io/url_launcher` | `note_video_section`, `social_row`, `track_button`, `travel_points_list`, `link_card` | по действию |
-| `app_links` | 6.4.1 | `com.llfbandit.app_links/messages` + `/events` | `deep_link_service.dart` | **старт — пропущен** (ошибка ловится, см. Фазу 1) |
-| `geolocator` | 14.x | `flutter.baseflow.com/geolocator` (+ `..._updates`, `..._service_updates`) | `travels_map_controller.dart` | лениво (карта) |
-| `image_picker` | 1.2.3 | Pigeon; hook `ImagePickerPlatform.instance` | `packages/strapi_media/.../strapi_media_client.dart` | лениво (фото) |
-| `image_cropper` | 12.2.1 | hook `ImageCropperPlatform.instance` | `packages/strapi_media/.../image_editor.dart` | лениво (кроп) |
-| `webview_flutter` | 4.10+ | Pigeon; hook `WebViewPlatform.instance` | `note_music_section.dart`, `track_section.dart` | лениво (web-view) |
+| `app_links` | 6.4.1 | `com.llfbandit.app_links/messages` + `/events` | `deep_link_service.dart` | **старт — подтверждён (listen), пропущен** (ошибка ловится, см. Фазу 1) |
+| `geolocator` | 14.x | `flutter.baseflow.com/geolocator` (+ `..._updates`, `..._service_updates`) | `travels_map_controller.dart` | лениво (карта) — **подтверждён** |
+| `image_picker` | 1.2.3 | Pigeon; hook `ImagePickerPlatform.instance` | `packages/strapi_media/.../strapi_media_client.dart` | лениво (фото) — **подтверждён** |
+| `image_cropper` | 12.2.1 | hook `ImageCropperPlatform.instance` | `packages/strapi_media/.../image_editor.dart` | лениво (кроп) — пока не показан отдельно |
+| `webview_flutter` | 4.10+ | Pigeon; hook `WebViewPlatform.instance` | `note_music_section.dart`, `track_section.dart` | лениво (web-view) — **падает в Dart до каналов** (null-check) |
 | `connectivity_plus` | 6.1.x | `dev.fluttercommunity.plus/connectivity` | прямых вызовов в коде нет | — |
 | `package_info_plus` | 10.2.x | `dev.fluttercommunity.plus/package_info` | прямых вызовов в коде нет | — |
 | `sqflite`, `jni`, `jni_flutter` | — | — | не используются приложением (Hive вместо sqflite) | — |
@@ -74,13 +77,31 @@
 `uriLinkStream` ловится в `try/catch` / `onError`, только лог). То есть
 **приложение, вероятно, уже стартует** — падения будут точечные, в фичах.
 
-**Подтверждено на железе (2026-10-10/11, итог Фазы 0):** приложение
-стартует, сплэш и UI работают (60 fps), авторизация проходит (после
-точечного TLS-обхода для `*.my-nexus.ru` — см. `docs/horizon-tls-roots.md`).
-В SD-логе единственный плагинный шум — `com.llfbandit.app_links/events`
-(`MissingPluginException` на `listen`), ловится приложением. Отдельно
-поймано Dart-исключение «Null check operator used on a null value» на пути
-после логина — это **не плагин**, а баг в коде `my_nexus`.
+**Подтверждено на железе (2026-10-10/11, полный прогон Фазы 0):** приложение
+стартует, сплэш и UI работают, авторизация проходит (после точечного
+TLS-обхода для `*.my-nexus.ru` — см. `docs/horizon-tls-roots.md`).
+Телеметрия каналов (лог `my_nexus.log`, одна сессия, сценарии карта →
+фото → музыкальная заметка → внешние ссылки):
+
+- `flutter.baseflow.com/geolocator` — подтверждён (экран карты);
+- `plugins.flutter.io/image_picker` — подтверждён (фото-визард);
+- `com.llfbandit.app_links/events` + `/messages` — подтверждены **на старте**
+  (`listen`), ошибка ловится приложением, не фатально;
+- системные `flutter/{isolate,keyboard,platform,navigation,processtext}` —
+  разовые, не критичны (у `processtext` разобраться при выборе фото);
+- `url_launcher`, `webview_flutter` — НЕ подтверждены как каналы:
+  webview_flutter падает в Dart до вызова каналов (см. ниже).
+
+Две отдельные находки прогона:
+
+1. **webview_flutter**: `WebViewController()` на этой платформе падает в
+   `WebViewPlatform.instance!` — 47× «Null check operator used on a null
+   value» и падение FPS до ~5 (заметки с музыкой и все `TrackSection`).
+   Это и есть «null-check после логина», а не баг в коде приложения.
+2. **DNS под параллельной нагрузкой**: NETPROBE (последовательные lookup'ы)
+   полностью OK, но ~100 одновременных запросов плиток карты
+   (`*.basemaps.cartocdn.com`) валятся в `Failed host lookup ... errno = 11
+   (System busy)` — лимит параллельных запросов DNS-резолвера libnx.
 
 ---
 
@@ -110,22 +131,29 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 
 ## 4. Фазы
 
-### Фаза 0 — диагностика на железе (частично выполнена 2026-10-10/11)
+### Фаза 0 — диагностика на железе (выполнена полностью 2026-10-11)
 
-Итог на консоли (сборка `examples/my_nexus/my_nexus.nro`, режим приложения):
+Итог на консоли (сборка `examples/my_nexus/my_nexus.nro`, режим приложения,
+одна сессия; телеметрия неизвестных каналов — коммит 3486f68):
 
-- Старт, сплэш, UI — работают (60 fps); авторизация проходит после
-  точечного TLS-обхода для `*.my-nexus.ru` (см. `docs/horizon-tls-roots.md`).
-- Единственный плагинный шум в SD-логе — `com.llfbandit.app_links/events`
-  (`MissingPluginException` на `listen`); приложение ловит, не фатально.
-- `path_provider`/`shared_preferences`/`hive` на старте работают
-  (Hive-кэш и хранилища инициализируются).
-- Поймано Dart-исключение «Null check operator used on a null value» после
-  логина — баг в коде `my_nexus`, не плагин; разбирается отдельно.
-- **Не проверено на железе:** карта, фото, web-view, внешние ссылки.
-  Это продолжение Фазы 0: перед реализацией каждого элемента Фазы 3 —
-  сначала прогнать сценарий на текущей сборке и зафиксировать реальные
-  каналы/исключения.
+- Старт, сплэш, UI, авторизация — работают (после точечного TLS-обхода для
+  `*.my-nexus.ru`, см. `docs/horizon-tls-roots.md`).
+- Сценарий «карта»: канал `flutter.baseflow.com/geolocator` → Not implemented.
+  Плитки карты (flutter_map, `*.basemaps.cartocdn.com`) не грузятся: DNS
+  `Failed host lookup ... errno = 11 (System busy)` при ~100 параллельных
+  lookup'ах (последовательные lookup'ы NETPROBE — OK).
+- Сценарий «фото-визард»: канал `plugins.flutter.io/image_picker` →
+  Not implemented (до реализации выбор фото невозможен).
+- Сценарий «музыкальная заметка»: каналы webview_flutter НЕ вызываются —
+  `WebViewController()` падает в Dart на `WebViewPlatform.instance!`
+  (47× null-check, FPS ~5). Заметки с музыкой/треками нужна Фаза 3.
+- Сценарий «внешние ссылки»: НЕ воспроизведён (в логе 0 вызовов
+  `url_launcher`, 0 вызовов системного браузера); перенесён на ретест
+  при следующем прогоне. Хендлер url_launcher готов (Фаза 2).
+- `app_links`: подтверждён на старте (`listen` на `/events`), ошибка
+  ловится приложением — пропуск (Фаза 1) остаётся в силе.
+- `processtext` (канал `flutter/processtext`) сработал перед фото-визардом —
+  выяснить, что именно делает UI в этот момент (вставка из буфера?).
 
 ### Фаза 1 — инфраструктура эмбеддера + скипы
 
@@ -152,7 +180,8 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 ### Фаза 2 — app-агностичный охват
 
 **`url_launcher`** — уже реализован; проверить на железе под 6.3.x (клик
-по внешней ссылке из приложения):
+по внешней ссылке из приложения). На прогоне 2026-10-11 сценарий не
+воспроизведён (0 обращений к каналу в логе) — ретест отложен:
 - `canLaunch` args `{url}`, `launch` args `{url, useSafariVC, useWebView,
   enableJavaScript, enableDomStorage, universalLinksOnly, headers}` →
   `bool`; `closeWebView` → void. Реализация через системный браузер-апплет
@@ -245,7 +274,12 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
    быть нетривиальным; возможно, дешевле честная ошибка (3b).
 4. **`strapi_media`** — локальный пакет; при Dart-шимах убедиться, что его
    вызовы `ImagePicker()`/`ImageCropper()` идут через `*.instance`.
-5. **Неизвестные каналы.** Фаза 0 может открыть каналы, которых нет в таблице.
+5. **Неизвестные каналы.** Фаза 0 закрыта телеметрией (коммит 3486f68):
+   список подтверждён, новых каналов вне таблицы не обнаружено.
+6. **DNS в libnx не тянет параллельные lookup'ы** (карта): `errno=11
+   (System busy)` при массовых запросах плиток. NETPROBE последовательно —
+   OK. Трогать сетевой стек отдельно (не в рамках плагинов); для карты
+   рассмотреть кэш/сериализацию запросов на Dart-стороне.
 
 ---
 
