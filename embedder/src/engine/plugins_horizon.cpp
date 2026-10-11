@@ -31,6 +31,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 
 #include "embedder.h"
 #include "flutter_libnx/log.h"
@@ -669,6 +670,13 @@ extern "C" bool flutter_libnx_handle_plugin_message(
       strcmp(message->channel, "plugins.flutter.io/url_launcher") == 0;
   if (!is_path_provider && !is_shared_preferences && !is_secure_storage &&
       !is_url_launcher) {
+    // Diagnose (Phase 0): unbekannte Kanäle beim ersten Auftreten melden,
+    // damit im Log sichtbar wird, welche Kanäle die App wirklich anspricht.
+    static std::set<std::string> g_logged_unknown_channels;
+    if (g_logged_unknown_channels.insert(message->channel).second) {
+      LOG_WARN("%s: unbekannter Kanal -> MissingPluginException",
+               message->channel);
+    }
     return false;
   }
 
