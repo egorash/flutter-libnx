@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <unordered_map>
 
 #include "embedder.h"
 #include "flutter_libnx/log.h"
@@ -80,9 +81,12 @@ void Respond(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 
 // --- path_provider ----------------------------------------------------------
 
+// path_provider nimmt keine Argumente - alle Methoden sind reine Getter, der
+// args-Parameter bleibt aus Einheitlichkeit im Registry-Schema ungenutzt.
 bool HandlePathProvider(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                         const FlutterPlatformMessage* message,
-                        const std::string& method) {
+                        const std::string& method,
+                        const StdValue& /*args*/) {
   const char* subdir = nullptr;
   if (method == "getTemporaryDirectory") {
     subdir = "tmp";
@@ -822,77 +826,91 @@ bool HandleImagePicker(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 
 }  // namespace
 
+// --- Kanal-Registry ---------------------------------------------------------
+//
+// Ein neuer Kanal = eine Zeile in MakeRegistry(): raw fuer Kanaele, die ihr
+// Nachrichtenformat selbst dekodieren (JSON/EventChannel), method fuer Kanaele
+// mit StandardMethodCodec. Der Dispatcher kennt keine if/strcmp-Kette mehr und
+// buendelt Lookup + Dekodierung + Aufruf an einer Stelle.
+
+namespace {
+
+using RawHandler = bool (*)(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                            const FlutterPlatformMessage* message);
+using MethodHandler = bool (*)(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                               const FlutterPlatformMessage* message,
+                               const std::string& method,
+                               const StdValue& args);
+
+struct ChannelRegistry {
+  std::unordered_map<std::string, RawHandler> raw;
+  std::unordered_map<std::string, MethodHandler> method;
+};
+
+ChannelRegistry MakeRegistry() {
+  ChannelRegistry r;
+  // Kanäle mit eigenem Codec/Protokoll (dekodieren die Nachricht selbst).
+  r.raw["miguelruivo.flutter.plugins.filepicker"] = HandleFilePicker;
+  r.raw["flutter.baseflow.com/geolocator_updates"] = HandleGeolocatorEventChannel;
+  r.raw["flutter.baseflow.com/geolocator_service_updates"] =
+      HandleGeolocatorEventChannel;
+  // StandardMethodCodec: method + args, Antwort ueber EncodeStd*.
+  r.method["plugins.flutter.io/path_provider"] = HandlePathProvider;
+  r.method["plugins.flutter.io/shared_preferences"] = HandleSharedPreferences;
+  r.method["plugins.it_nomads.com/flutter_secure_storage"] = HandleSecureStorage;
+  r.method["plugins.flutter.io/url_launcher"] = HandleUrlLauncher;
+  r.method["flutter.baseflow.com/geolocator"] = HandleGeolocator;
+  r.method["plugins.flutter.io/image_picker"] = HandleImagePicker;
+  return r;
+}
+
+const ChannelRegistry& GetRegistry() {
+  static const ChannelRegistry kRegistry = MakeRegistry();
+  return kRegistry;
+}
+
+// Diagnose (Phase 0): unbekannte Kanaele beim ersten Auftreten melden, damit
+// im Log sichtbar wird, welche Kanaele die App wirklich anspricht.
+bool LogUnknownChannelOnce(const std::string& channel) {
+  static std::set<std::string> g_logged_unknown_channels;
+  if (g_logged_unknown_channels.insert(channel).second) {
+    LOG_WARN("%s: unbekannter Kanal -> MissingPluginException",
+             channel.c_str());
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 // Behandelt die Plugin-Kanäle. true heißt: beantwortet (oder bewusst der
 // leeren Antwort des Aufrufers überlassen -> false zurückgeben!).
 extern "C" bool flutter_libnx_handle_plugin_message(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterPlatformMessage* message) {
-  // file_picker zuerst: Der Kanal spricht auf dieser Plattform JSON
-  // (siehe HandleFilePicker), nicht den Standard-Codec.
-  if (strcmp(message->channel, "miguelruivo.flutter.plugins.filepicker") ==
-      0) {
-    return HandleFilePicker(engine, message);
+  const ChannelRegistry& reg = GetRegistry();
+  const std::string channel(message->channel);
+
+  const auto raw = reg.raw.find(channel);
+  if (raw != reg.raw.end()) {
+    return raw->second(engine, message);
   }
 
-  // geolocator-EventKanaele (Positions-/Dienststatus-Strom): nur listen/cancel
-  // quittieren, Ereignisse kommen nie (kein Ortungssystem).
-  if (strcmp(message->channel, "flutter.baseflow.com/geolocator_updates") ==
-          0 ||
-      strcmp(message->channel,
-             "flutter.baseflow.com/geolocator_service_updates") == 0) {
-    return HandleGeolocatorEventChannel(engine, message);
-  }
-
-  const bool is_path_provider =
-      strcmp(message->channel, "plugins.flutter.io/path_provider") == 0;
-  const bool is_shared_preferences =
-      strcmp(message->channel, "plugins.flutter.io/shared_preferences") == 0;
-  const bool is_secure_storage =
-      strcmp(message->channel,
-             "plugins.it_nomads.com/flutter_secure_storage") == 0;
-  const bool is_url_launcher =
-      strcmp(message->channel, "plugins.flutter.io/url_launcher") == 0;
-  const bool is_geolocator =
-      strcmp(message->channel, "flutter.baseflow.com/geolocator") == 0;
-  const bool is_image_picker =
-      strcmp(message->channel, "plugins.flutter.io/image_picker") == 0;
-  if (!is_path_provider && !is_shared_preferences && !is_secure_storage &&
-      !is_url_launcher && !is_geolocator && !is_image_picker) {
-    // Diagnose (Phase 0): unbekannte Kanäle beim ersten Auftreten melden,
-    // damit im Log sichtbar wird, welche Kanäle die App wirklich anspricht.
-    static std::set<std::string> g_logged_unknown_channels;
-    if (g_logged_unknown_channels.insert(message->channel).second) {
-      LOG_WARN("%s: unbekannter Kanal -> MissingPluginException",
-               message->channel);
-    }
+  const auto method = reg.method.find(channel);
+  if (method == reg.method.end()) {
+    LogUnknownChannelOnce(channel);
     return false;
   }
 
-  std::string method;
+  std::string name;
   StdValue args;
-  if (!DecodeStdMethodCall(message->message, message->message_size, &method,
+  if (!DecodeStdMethodCall(message->message, message->message_size, &name,
                            &args)) {
-    LOG_WARN("%s: Nachricht nicht dekodierbar (%zu Bytes)", message->channel,
+    LOG_WARN("%s: Nachricht nicht dekodierbar (%zu Bytes)", channel.c_str(),
              message->message_size);
     return false;
   }
-
-  if (is_path_provider) {
-    return HandlePathProvider(engine, message, method);
-  }
-  if (is_secure_storage) {
-    return HandleSecureStorage(engine, message, method, args);
-  }
-  if (is_url_launcher) {
-    return HandleUrlLauncher(engine, message, method, args);
-  }
-  if (is_geolocator) {
-    return HandleGeolocator(engine, message, method, args);
-  }
-  if (is_image_picker) {
-    return HandleImagePicker(engine, message, method, args);
-  }
-  return HandleSharedPreferences(engine, message, method, args);
+  return method->second(engine, message, name, args);
 }
 
 }  // namespace flutter_libnx
