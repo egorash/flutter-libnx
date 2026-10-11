@@ -23,6 +23,8 @@ examples/**/build/
 build-logs/
 examples/*/generated/
 examples/*/romfs/
+# Автогенерируемая NRO-иконка (build-dart-app.sh из логотипа/mipmap проекта)
+examples/*/icon.jpg
 
 # macOS
 .DS_Store

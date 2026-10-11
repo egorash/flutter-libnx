@@ -158,6 +158,16 @@
   `examples/ui_app`. Дефолтный `--project` — `examples/NAME/dart`. Подсказка
   в конце указывает на `rebuild-all.sh NAME`. Так собирается произвольное
   приложение в отдельную цель (`examples/my_nexus`) — см. ниже.
+- **`build-dart-app.sh` (иконка NRO)** — автоподстановка иконки `.nro`
+  (Спринт 1, блок C2b, `docs/infra-plan.md`): из исходника берётся
+  `assets/icons/logo.png` (как в `flutter_launcher_icons`), иначе
+  `assets/logo.png|app_icon.png|icon.png`, иначе самая крупная Android-mipmap
+  (`ic_launcher.png`, приоритет по плотности xxxhdpi→mdpi). Конвертация в
+  `256x256` JPEG — через `sips` (macOS), `magick`/`convert` (ImageMagick)
+  либо `python3+PIL`; результат — `examples/<NAME>/icon.jpg`, который
+  devkitPro-Makefile примеров сам передаёт в `elf2nro --icon`. Нет исходника
+  или конвертера — предупреждение, сборка с дефолтной иконкой. Флаг не
+  добавлялся; `examples/*/icon.jpg` в `.gitignore`.
 - **`examples/my_nexus`** (новый пример-цель) — сборка произвольного
   Flutter-проекта в `my_nexus.nro`. `Makefile` — копия `ui_app` с другим
   `TARGET`/`APP_TITLE`; `source/main.cpp` — **симлинк** на общий раннер
