@@ -210,6 +210,39 @@
 - **`relink-example.sh` / `build-example-wsl.sh`** — контракт не меняется:
   `build-example-wsl.sh` уже платформо-нейтрален (задаёт devkitPro и `make`),
   поэтому на macOS вызывается как есть.
+- **`scripts/common.sh` (новый, Спринт 2 F)** — общий модуль-хелпер,
+  подключается через `source "$(dirname "${BASH_SOURCE[0]}")/common.sh"`
+  сразу после собственного `set -euo pipefail` в каждом публичном скрипте.
+  Предоставляет (и **не** ставит `set`-флаги сам, чтобы контроль оставался
+  видимым в каждом скрипте):
+  - `REPO` — корень репозитория (из `BASH_SOURCE[0]`, env-override
+    уважается: уже установленный `REPO` не перезаписывается);
+  - `SCRIPTS` — `$REPO/scripts` (API, подавлен SC2034);
+  - `die MSG` — сообщение в stderr + `exit 1`;
+  - `require_cmd NAME [HINWEIS]` — `command -v` с единообразным сообщением
+    «fehlendes Werkzeug» и опциональной подсказкой.
+  Идемпотентен (повторное подключение безопасно).
+- **Скрипты, переведённые на `common.sh` (Спринт 2 F):** `build-dart-app.sh`,
+  `rebuild-all.sh`, `build-example-wsl.sh`, `relink-example.sh`,
+  `build-horizon.sh`, `gn-gen-horizon.sh`, `build-sqlite3.sh`,
+  `build-ui-app.sh`, `build-aot-poc.sh`, `dkp.sh`, `fetch-reference.sh`,
+  `nxlink-upload.sh`, `log-listener.sh`, `setup-macos.sh`,
+  `setup-engine-checkout.sh`, `install-devkitpro-macos.sh`,
+  `install-portlibs-macos.sh`. Локальные вычисления `root=`/`REPO=$(cd ……)`
+  заменены на `root="$REPO"` (сами публичные CLI-контракты не изменились).
+  Где уместно, добавлены `require_cmd` (make/pkg-config, python3, curl, git,
+  brew, sudo) и проверки существования тулчейна (`[ -x "$CC" ] || die …`).
+- **Единообразие `set -euo pipefail` (Спринт 2 F2):** у `relink-example.sh`
+  добавлен флаг `-e`; семантика `BUILD_RC` сохранена через
+  `if …; then BUILD_RC=0; else BUILD_RC=$?; fi`, а grep-пайплайны анализа,
+  которые легально не находят совпадений (0 undefined / нет дублей),
+  прикрыты `|| true` (иначе `-e`+pipefail убивал скрипт на успешном линке).
+  У `gn-gen-horizon.sh` флаг `-e` **намеренно не** включается: весь смысл
+  скрипта — пережить ожидаемый ПЕРВЫЙ провал `gn gen` и вывести
+  `PIPESTATUS[0]`; с `-e` он умирал бы на самом провале. Тот же класс
+  исключений — диагностические скрипты (`probe-*`, `find-*`, `show-*`): там
+  `set -uo pipefail` — защита от SIGPIPE в пайпах `find | head` (не входит
+  в F).
 
 ---
 
