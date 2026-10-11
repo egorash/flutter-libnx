@@ -21,6 +21,69 @@
 # nicht veraendern.
 set -euo pipefail
 
+# --- Иконка NRO --------------------------------------------------------------
+# libnx bettet eine 256x256-JPEG in die .nro ein; das devkitPro-Makefile der
+# Beispiele nimmt sie von selbst auf (icon.jpg oder <TARGET>.jpg im
+# Beispielverzeichnis). Quelle ist die Icon des Flutter-Projekts selbst:
+# zuerst assets/icons/logo.png bzw. assets/logo.png (dasselbe Bild, das auch
+# flutter_launcher_icons nutzt), sonst die groesste Android-mipmap
+# (xxxhdpi, 192px). PNG->JPEG 256x256 macht sips (macOS); Ausweichwege:
+# ImageMagick (magick/convert) oder python3+Pillow. Fehlt beides, baut die .nro
+# mit der Standard-Icon - die Meldung ist nur ein Hinweis, kein Abbruch.
+pick_nro_icon() {
+  local project="$1" app="$2"
+  local src=""
+  local c d
+
+  for c in \
+    "$project/assets/icons/logo.png" \
+    "$project/assets/logo.png" \
+    "$project/assets/app_icon.png" \
+    "$project/assets/icon.png"; do
+    [ -f "$c" ] && { src="$c"; break; }
+  done
+  if [ -z "$src" ]; then
+    # Reihenfolge = Dichte: xxxhdpi(192) > xxhdpi(144) > xhdpi(96) > hdpi(72).
+    for d in xxxhdpi xxhdpi xhdpi hdpi mdpi; do
+      c="$project/android/app/src/main/res/mipmap-$d/ic_launcher.png"
+      [ -f "$c" ] && { src="$c"; break; }
+    done
+  fi
+  if [ -z "$src" ]; then
+    echo "    keine Icon-Quelle im Projekt - .nro bekommt die Standard-Icon" >&2
+    return 0
+  fi
+
+  local out="$app/icon.jpg"
+  if command -v sips >/dev/null 2>&1; then
+    sips -s format jpeg -z 256 256 "$src" --out "$out" >/dev/null 2>&1 \
+      || rm -f "$out"
+  elif command -v magick >/dev/null 2>&1; then
+    magick "$src" -resize 256x256! -quality 90 "$out" || rm -f "$out"
+  elif command -v convert >/dev/null 2>&1; then
+    convert "$src" -resize 256x256! -quality 90 "$out" || rm -f "$out"
+  elif python3 -c 'import PIL' >/dev/null 2>&1; then
+    python3 - "$src" "$out" <<'PY' || rm -f "$out"
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+im = im.resize((256, 256), Image.LANCZOS)
+im.save(sys.argv[2], "JPEG", quality=90)
+PY
+  else
+    echo "    kein Konverter (sips/magick/convert/PIL) - Standard-Icon" >&2
+    return 0
+  fi
+
+  if [ -s "$out" ]; then
+    size_b="$(wc -c < "$out" | tr -d ' ')"
+    echo "    NRO-Icon: $src -> $out (${size_b} Bytes)"
+  else
+    echo "    Icon-Konvertierung fehlgeschlagen - Standard-Icon" >&2
+    rm -f "$out"
+  fi
+}
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 flutter="${FLUTTER_HOME:-$HOME/flutter-3.41.6}"
 sdk="$flutter/bin/cache/dart-sdk"
@@ -70,6 +133,7 @@ done
 
 mkdir -p "$generated" "$romfs"
 echo "==> Projekt: $project"
+pick_nro_icon "$project" "$app"
 
 # --- 1. Assets --------------------------------------------------------------
 echo '==> flutter build bundle'
