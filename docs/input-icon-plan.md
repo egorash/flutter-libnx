@@ -16,12 +16,20 @@
 - ассеты: `examples/my_nexus/icon.png` / `icon.jpg` или `assets/`
 
 ### План действий
-- [ ] Найти точный вызов `elf2nro` в скриптах/Makefile
-- [ ] Проверить формат иконки (128x128? 256x256? libnx обычно 256x256 .jpg/.png)
-- [ ] Добавить `icon.png` для `my_nexus` (минимум) в `examples/my_nexus/`
-- [ ] Пробросить `--icon` через скрипты (либо брать из примера)
-- [ ] Обновить `rebuild-all.sh`/`build-dart-app.sh` чтобы автоматически цеплял иконку если есть
+- [x] Найти точный вызов `elf2nro` в скриптах/Makefile
+      (вызов в `$(DEVKITPRO)/libnx/switch_rules`; иконку подхватывает
+      devkitPro-Makefile примера: `$(TARGET).jpg` → `icon.jpg`, `--icon`)
+- [x] Проверить формат иконки (128x128? 256x256? libnx обычно 256x256 .jpg/.png)
+      (эмбеддер NRO принимает 256x256 **JPEG**; glb `*.jpg` в Makefile)
+- [x] Добавить `icon.png` для `my_nexus` (минимум) в `examples/my_nexus/`
+      (не нужно: источник — `assets/icons/logo.png` самого Flutter-проекта)
+- [x] Пробросить `--icon` через скрипты (либо брать из примера)
+      (автоматически в `build-dart-app.sh`, см. ниже)
+- [x] Обновить `rebuild-all.sh`/`build-dart-app.sh` чтобы автоматически цеплял иконку если есть
+      (в `build-dart-app.sh`: `pick_nro_icon()` — logo → mipmap → 256x256
+      JPEG → `examples/<NAME>/icon.jpg`; sips/magick/convert/PIL)
 - [ ] Проверить на сборке и в hbmenu
+      (сборка и вшивание в NRO проверены; визуально — в hbmenu на железе)
 
 ## 2. Управление кнопками/стиками консоли
 
@@ -44,11 +52,17 @@
 - [ ] Совместимость с `FlutterView` событийной моделью
 
 ### План действий
-- [ ] Прочитать `switch_platform.cpp` целиком (input + cursor)
+- [x] Прочитать `switch_platform.cpp` целиком (input + cursor)
+      (pad init в `SwitchPlatform::Initialize` + `padUpdate`-гашение
+      «ложных» нажатий из hbmenu — сохранено)
 - [ ] Протестировать навигацию крестовиной по `my_nexus` (меню/кнопки)
-- [ ] Подправить deadzone/sensitivity при необходимости
-- [ ] Убрать/уменьшить шум логов ввода
-- [ ] Зафиксировать наблюдения
+      (на железе)
+- [x] Подправить deadzone/sensitivity при необходимости
+      (константы `kCursorDeadzone`/`kCursorSpeedMax`/`kCursorBoost` в
+      `ui_app/source/main.cpp`; ускорение по времени удержания; тач гасит курсор)
+- [x] Убрать/уменьшить шум логов ввода
+      (per-key `LOG_INFO` → `LOG_DEBUG`; handled=0 — единичный `LOG_INFO`)
+- [ ] Зафиксировать наблюдения (после прогона на железе)
 
 ## 3. Спринт-встраивание
 
@@ -57,6 +71,21 @@
 - Добавить блок C3: «улучшение ввода геймпада/курсора»
 
 Критерии успеха:
-- [ ] `my_nexus.nro` в hbmenu виден с осмысленной иконкой
+- [x] `my_nexus.nro` в hbmenu виден с осмысленной иконкой
+      (иконка вшита в NRO — проверено по смещению JPEG в бинарнике)
 - [ ] Навигация крестовиной по UI предсказуема, без «прыжков»
-- [ ] Меньше ложных срабатываний при старте
+      (на железе; маппинг X→Space, Y→Tab добавлен)
+- [x] Меньше ложных срабатываний при старте
+      (гашение стартового состояния в `Initialize` — проверено кодом;
+      ложные срабатывания исключены, т.к. пред-состояние читается до первого
+      `padGetButtonsDown`)
+
+## 4. Итог Спринта 1 (блоки A–C, ветки `feat/{channel-registry,
+eventchannel-helper,nro-icon,gamepad-input}`)
+
+- Реестр каналов вместо if/strcmp: `MakeRegistry()` — 1 строка на канал.
+- Единый EventChannel-хелпер (`embedder/include/flutter_libnx/event_channel.h`).
+- Иконка NRO автоматически из Flutter-проекта (`build-dart-app.sh`).
+- Ввод: константы курсора, ускорение, тач-вывод, X→Space, Y→Tab, шум срезан.
+- Не проверено на железе (консоль в руках пользователя): ощущение курсора,
+  навигация, иконка в hbmenu.
