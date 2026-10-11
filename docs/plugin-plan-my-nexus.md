@@ -244,11 +244,16 @@ Standard/JSON-протоколом. Регистрация — в `flutter_libnx
 2. **EventChannel-помощник.** Сейчас EventChannel нигде не обслуживается.
    Нужен общий ответ `success` на `listen`/`cancel` (Standard-кодек), чтобы
    стримы плагинов не сыпали ошибками.
-3. **Регистрант.** Расширить `build-dart-app.sh`: помимо детекта `file_picker`
-   — детект `image_picker`/`image_cropper`/`webview_flutter` и генерация
-   соответствующих присвоений `*.instance`, плюс включение шим-файлов из
-   `dart_helpers/` (или отдельного `dart_helpers/horizon_plugins/`) в
-   `generated/`.
+3. **Регистрант.** ✅ Сделано (Спринт 2, блок D, ветка `feat/registrant-plugins`,
+   коммиты `feat(scripts):` + `docs:`): `build-dart-app.sh` детектит `file_picker`
+   (как раньше) плюс `image_picker`/`image_cropper`/`webview_flutter`; шим-файлы
+   из `dart_helpers/horizon_plugins/` копируются в `generated/` только с
+   маркером `// HORIZON_SHIM: READY`, вызов — `import 'shim_<pkg>.dart'
+   as shim_<pkg>;` + `shim_<pkg>.registerHorizonShim();` в `main()`;
+   без готового шима — комментарий-напоминание в сгенерированном файле.
+   Каркасы шимов (`shim_image_picker.dart`, `shim_image_cropper.dart`,
+   `shim_webview_flutter.dart`) лежат в `dart_helpers/horizon_plugins/`
+   **без** маркера (не ломают рантайм my_nexus).
 4. **Телеметрия.** В лог — имя каждого необработанного канала (сейчас тихо
    возвращается `false` → `MissingPluginException`). Облегчает Фазу 0 и
    последующую отладку.

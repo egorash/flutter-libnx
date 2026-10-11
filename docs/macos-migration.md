@@ -168,6 +168,21 @@
   devkitPro-Makefile примеров сам передаёт в `elf2nro --icon`. Нет исходника
   или конвертера — предупреждение, сборка с дефолтной иконкой. Флаг не
   добавлялся; `examples/*/icon.jpg` в `.gitignore`.
+- **`build-dart-app.sh` (Horizon-регистрант, Спринт 2 D1/D2)** —
+  `generated/horizon_main.dart` всегда генерируется, как только в проекте
+  обнаружено одно из поддерживаемых пакетов: `file_picker` (как и раньше —
+  `FilePickerIO.registerWith()`), а также `image_picker`, `image_cropper`,
+  `webview_flutter` (детект по `package_config.json`, без ложных
+  срабатываний на `image_picker_platform_interface` и т.п.). Для трёх шим-
+  пакетов ищется `dart_helpers/horizon_plugins/shim_<pkg>.dart`; штится он
+  **только с маркером `// HORIZON_SHIM: READY`** внутри файла — тогда файл
+  копируется в `generated/`, а в `main()` эмитятся
+  `import 'shim_<pkg>.dart' as shim_<pkg>;` и `shim_<pkg>
+  .registerHorizonShim();` (сам присвоения `XPlatform.instance = ...`
+  делает шим, регистрант только вызывает регистратор). Без маркера/файла —
+  в файл идёт комментарий `// <pkg>: ... не READY / kein Shim`. Пустые
+  массивы (`imports/regs/notes/shims`) под `set -u` защищены идиомой
+  `${arr[@]+"${arr[@]}"}` (bash 3.2, macOS).
 - **`examples/my_nexus`** (новый пример-цель) — сборка произвольного
   Flutter-проекта в `my_nexus.nro`. `Makefile` — копия `ui_app` с другим
   `TARGET`/`APP_TITLE`; `source/main.cpp` — **симлинк** на общий раннер

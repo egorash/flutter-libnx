@@ -121,9 +121,9 @@
 Цель: меньше копипаста при добавлении плагинов + мелкие улучшения скриптов.
 
 Задачи:
-- D1. Расширить `build-dart-app.sh`: детект `image_picker/image_cropper/webview_flutter`
-- D2. Генерация `horizon_main.dart` с учётом списка детектов (без ломки file_picker)
-- E1. Шаблон `plugin_template/` (C++ + реестр + Dart-шим-заготовка)
+- [x] D1. Расширить `build-dart-app.sh`: детект `image_picker/image_cropper/webview_flutter`
+- [x] D2. Генерация `horizon_main.dart` с учётом списка детектов (без ломки file_picker)
+- [ ] E1. Шаблон `plugin_template/` (C++ + реестр + Dart-шим-заготовка)
 - F1. Единые проверки `command -v` в ключевых скриптах
 - F2. `set -euo pipefail` единообразно
 - F3. shellcheck по 2–3 критичным скриптам (`build-dart-app.sh`, `rebuild-all.sh`)
@@ -152,8 +152,8 @@
       (ветка `feat/eventchannel-helper`)
 - [x] `.nro` `my_nexus` имеет осмысленную иконку в hbmenu
       (ветка `feat/nro-icon`; иконка в NRO проверена; визуально — на железе)
-- [ ] `build-dart-app.sh` детектит нужные плагины, регистрант корректен
-      (Спринт 2, блок D)
+- [x] `build-dart-app.sh` детектит нужные плагины, регистрант корректен
+      (Спринт 2, блок D; ветка `feat/registrant-plugins`)
 - [ ] Есть `docs/infra.md` + шаблон плагина
       (Спринт 2–3)
 - [x] Критичные скрипты чище, меньше ручных проверок
@@ -180,3 +180,29 @@
 - Проверить ложные нажатия при старте из hbmenu
 
 Критерии в `docs/input-icon-plan.md`.
+
+## Дополнение: регистрант и Dart-шимы (Спринт 2 D1/D2, добавлено 2026-10-11)
+
+Ветка `feat/registrant-plugins`. Контракт — в `docs/macos-migration.md`
+(раздел «macOS-обновление контрактов»), шимы — в `docs/plugin-plan-my-nexus.md`
+(раздел 5, п. 3).
+
+### D1. Детект плагинов в `build-dart-app.sh`
+- Детект по `package_config.json` (grep `"name": "<pkg>"`), без ложных
+  срабатываний на транзитивных (`image_picker_platform_interface` и т.п.
+  не матчатся — закрывающая кавычка сразу после имени).
+- Пакеты: `file_picker` (legacy, `FilePickerIO.registerWith()`),
+  `image_picker`, `image_cropper`, `webview_flutter` (Dart-шимы).
+- `detected>=1` → `generated/horizon_main.dart` генерируется всегда (даже
+  только с комментариями) — разработчик видит в файле, что ещё не готово.
+
+### D2. Включение Dart-шимов
+- Шим: `dart_helpers/horizon_plugins/shim_<pkg>.dart`; у каждого — функция
+  `void registerHorizonShim()`, которая сама делает `XPlatform.instance = ...`.
+- Включается ТОЛЬКО файл с маркером `// HORIZON_SHIM: READY` → копия в
+  `generated/`, в `main()` эмитятся `import 'shim_<pkg>.dart' as shim_<pkg>;`
+  и `shim_<pkg>.registerHorizonShim();` (префиксный импорт — чтобы несколько
+  шимов не конфликтовали именами функций).
+- Каркасы трёх шимов лежат БЕЗ маркера (не ломают рантайм my_nexus);
+  image_picker на текущих версиях работает через C++-канал
+  `plugins.flutter.io/image_picker` и шим не требует вовсе.
