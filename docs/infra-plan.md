@@ -124,9 +124,9 @@
 - [x] D1. Расширить `build-dart-app.sh`: детект `image_picker/image_cropper/webview_flutter`
 - [x] D2. Генерация `horizon_main.dart` с учётом списка детектов (без ломки file_picker)
 - [x] E1. Шаблон `plugin_template/` (C++ + реестр + Dart-шим-заготовка)
-- F1. Единые проверки `command -v` в ключевых скриптах
-- F2. `set -euo pipefail` единообразно
-- F3. shellcheck по 2–3 критичным скриптам (`build-dart-app.sh`, `rebuild-all.sh`)
+- [x] F1. Единые проверки `command -v` в ключевых скриптах
+- [x] F2. `set -euo pipefail` единообразно
+- [x] F3. shellcheck по 2–3 критичным скриптам (`build-dart-app.sh`, `rebuild-all.sh`)
 
 ### Спринт 3 (производительность + документация + шум) — G, H, I
 Цель: зафиксировать текущее состояние, снизить шум, описать инфраструктуру.
@@ -225,3 +225,39 @@
 
 Сборка зелёная: `build-dart-app.sh --example plugin_template` +
 `rebuild-all.sh plugin_template` → `plugin_template.nro`.
+
+## Дополнение: общий модуль скриптов (Спринт 2 F1–F3, добавлено 2026-10-11)
+
+Ветка `feat/scripts-polish`. Новый `scripts/common.sh` — модуль-хелпер для
+всех публичных скриптов build-цепочки (см. контракт в `docs/macos-migration.md`):
+
+- `REPO` — корень репозитория (из `BASH_SOURCE[0]`, env-override уважается),
+  `SCRIPTS` — `$REPO/scripts`;
+- `die MSG` — сообщение в stderr + `exit 1`;
+- `require_cmd NAME [HINWEIS]` — единая проверка `command -v` (F1);
+- сам модуль `set`-флаги НЕ ставит — каждый скрипт декларирует
+  `set -euo pipefail` и затем делает `source common.sh`.
+
+F1. Единые `require_cmd`: make/pkg-config (`build-example-wsl`), python3
+    (`log-listener`), curl+git (`fetch-reference`, `install-devkitpro`),
+    brew (`setup-macos`), sudo (`install-portlibs`), git
+    (`setup-engine-checkout`); проверка тулчейна `[ -x "$CC" ] || die …`
+    в `build-sqlite3`.
+F2. `set -euo pipefail` единообразно. Найденные ловушки учтены:
+    `relink-example.sh` — `BUILD_RC` через if/else, grep-пайплайны анализа
+    прикрыты `|| true` (иначе успешный линк «0 undefined» убивал скрипт);
+    `gn-gen-horizon.sh` сознательно остаётся на `-uo` (ожидаемый первый
+    провал `gn gen` и чтение `PIPESTATUS`), как и диагностические
+    `probe-*/find-*/show-*` (SIGPIPE у `find | head`).
+F3. `shellcheck -S warning` чист по всем изменённым скриптам (единственный
+    жёлтый SC2034 в `common.sh` — документированный API-экспорт `SCRIPTS`;
+    pre-existing `FLUTTER_LIBNX_QUIET` в `setup-macos.sh` не трогали:
+    переменную читает `env.sh` в том же процессе).
+
+Мигрированы 17 скриптов: `build-dart-app`, `rebuild-all`,
+`build-example-wsl`, `relink-example`, `build-horizon`, `gn-gen-horizon`,
+`build-sqlite3`, `build-ui-app`, `build-aot-poc`, `dkp`, `fetch-reference`,
+`nxlink-upload`, `log-listener`, `setup-macos`, `setup-engine-checkout`,
+`install-devkitpro-macos`, `install-portlibs-macos`. Публичные CLI-контракты
+не менялись; локальные `root=`/`REPO=$(cd …)` → `root="$REPO"`.
+Диагностические скрипты (`probe-*`, `find-*`, `show-*`) — вне скоупа F.

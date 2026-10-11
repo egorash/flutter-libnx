@@ -10,7 +10,9 @@
 #   ./scripts/setup-macos.sh [--no-devkitpro]
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+ROOT="$REPO"
 FLUTTER_VERSION="3.41.6"
 FLUTTER_HOME="${FLUTTER_HOME:-$HOME/flutter-3.41.6}"
 WITH_DEVKITPRO=1
@@ -28,12 +30,7 @@ warn() { printf '\033[1;33mВНИМАНИЕ:\033[0m %s\n' "$*"; }
 ok()   { printf '  \033[1;32mok\033[0m: %s\n' "$*"; }
 
 # 1. Homebrew -------------------------------------------------------------
-if ! command -v brew >/dev/null 2>&1; then
-  echo "Homebrew не найден. Установи его и повтори:" >&2
-  # shellcheck disable=SC2016
-  echo '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"' >&2
-  exit 1
-fi
+require_cmd brew 'Homebrew ist nicht installiert - Installation: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 log "Homebrew: $(brew --version | head -1)"
 
 # 2. Пакеты ---------------------------------------------------------------

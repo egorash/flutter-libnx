@@ -21,6 +21,10 @@
 # Server-Eintraege bleiben unangetastet.
 set -euo pipefail
 
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+require_cmd sudo "sudo ist Teil von macOS"
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "Запусти через sudo: sudo $0" >&2
   exit 1

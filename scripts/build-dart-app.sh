@@ -84,7 +84,9 @@ PY
   fi
 }
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+root="$REPO"
 flutter="${FLUTTER_HOME:-$HOME/flutter-3.41.6}"
 sdk="$flutter/bin/cache/dart-sdk"
 engine="$flutter/bin/cache/artifacts/engine"
@@ -130,6 +132,8 @@ assets="$romfs/flutter_assets"
 for p in "$sdk" "$platform" "$icu" "$project/pubspec.yaml"; do
   [ -e "$p" ] || { echo "Nicht gefunden: $p" >&2; exit 1; }
 done
+[ -x "$flutter/bin/flutter" ] || die \
+  "Flutter-SDK fehlt unter $flutter (FLUTTER_HOME) - erst scripts/setup-macos.sh"
 
 mkdir -p "$generated" "$romfs"
 echo "==> Projekt: $project"

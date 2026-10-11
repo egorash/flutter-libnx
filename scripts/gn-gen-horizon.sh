@@ -5,6 +5,9 @@
 # bekommen, statt sie zu erraten.
 set -uo pipefail
 
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 GN="$SRC/flutter/third_party/gn/gn"
 OUT="${OUT:-out/horizon_release_arm64}"

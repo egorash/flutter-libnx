@@ -12,7 +12,9 @@
 # laeuft auf dem Host (macOS darwin-arm64 statt windows-x64 im Original).
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+root="$REPO"
 flutter="${FLUTTER_HOME:-$HOME/flutter-3.41.6}"
 sdk="$flutter/bin/cache/dart-sdk"
 

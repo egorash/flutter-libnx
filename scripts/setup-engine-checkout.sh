@@ -7,6 +7,10 @@
 # weil die ext4-VHDX der Distribution dort liegt.
 set -euo pipefail
 
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+require_cmd git "git muss installiert sein (macOS: Xcode CLT oder brew)"
+
 ENGINE_DIR="${ENGINE_DIR:-$HOME/engine}"
 DEPOT_TOOLS="${DEPOT_TOOLS:-$HOME/depot_tools}"
 # Gepinnt auf Flutter 3.41.6 – siehe README.md.

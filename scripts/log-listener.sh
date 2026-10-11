@@ -13,6 +13,10 @@
 #   log-listener.sh [--port 28800] [--timeout 120] [--out datei.log]
 set -euo pipefail
 
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+require_cmd python3 "python3 ist auf macOS ueber Xcode CLT/Homebrew vorhanden"
+
 port=28800
 timeout_seconds=120
 out_file=""

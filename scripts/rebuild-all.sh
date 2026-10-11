@@ -21,7 +21,8 @@
 # beide werden vom nativen Compiler gebaut und emittieren Horizon/arm64-Code.
 set -euo pipefail
 
-REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 OUT="${OUT:-out/horizon_release_arm64}"
 EXAMPLE="${1:-ui_app}"

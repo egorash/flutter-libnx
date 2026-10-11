@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 # --- macOS: дефолты путей (env.sh задаёт те же переменные) ---
+# Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 
 # Baut sqlite3 (Amalgamation, third_party/sqlite3) als statische Bibliothek
@@ -30,14 +34,13 @@ DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 # der Embedder macht "unix-none" (keine Sperren) zum Standard-VFS, sobald die
 # Bibliothek zum ersten Mal angefordert wird. Auf einer Konsole greift kein
 # zweiter Prozess auf die Datenbank zu.
-set -euo pipefail
-
-REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 SRC="$REPO/third_party/sqlite3"
 DEVKITA64="${DEVKITA64:-$DEVKITPRO/devkitA64}"
 CC="$DEVKITA64/bin/aarch64-none-elf-gcc"
 AR="$DEVKITA64/bin/aarch64-none-elf-gcc-ar"
 NM="$DEVKITA64/bin/aarch64-none-elf-nm"
+
+[ -x "$CC" ] || die "kein devkitA64-GCC unter $CC - erst scripts/install-devkitpro-macos.sh"
 
 cd "$SRC"
 
