@@ -176,28 +176,69 @@ done
 
 # --- Horizon-Registrant -----------------------------------------------------
 # Wie im Original: erzeugter Einstiegspunkt, der VOR main() die
-# METHOD-CHANNEL-Implementierungen registriert (die Liste waechst mit den
-# unterstuetzten Paketen; Antworten kommen aus plugins_horizon.cpp des
-# Embedders). Ohne ihn bleibt bei Paketen mit `static late _instance`
-# (z.B. file_picker) die Plattform-Instanz ungesetzt.
+# Plattform-Registrierungen ausfuehrt - Method-Channels aus
+# plugins_horizon.cpp (file_picker, ...) und Dart-Shims aus
+# dart_helpers/horizon_plugins/ (image_picker, image_cropper,
+# webview_flutter). Ohne Registranten bleibt bei Paketen mit statischer
+# Plattform-Instanz die Instanz ungesetzt (z.B. file_picker) oder das Paket
+# faellt mit einem Null-Check in Dart (z.B. webview_flutter: `instance!`).
+# Der Registrant wird daher IMMER erzeugt, sobald EINES der unterstuetzten
+# Pakete im Projekt steckt - auch wenn noch nichts zu registrieren ist,
+# damit die Kommentarzeilen im erzeugten File zeigen, was noch fehlt.
+#
+# Dart-Shims: fuer jedes erkannte Paket wird
+# dart_helpers/horizon_plugins/shim_<paket>.dart gesucht. Eingebunden wird
+# NUR ein fertiger Shim - er muss den Marker  // HORIZON_SHIM: READY
+# enthalten (dann: Kopie nach generated/ + Import + registerHorizonShim()).
+# Fehlt der Marker oder die Datei, landet stattdessen eine Kommentarzeile
+# im erzeugten File.
 app_name="$(sed -n 's/^name:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$project/pubspec.yaml" | head -1)"
-registrations=""
-imports=""
+
+# detected: mindestens eines der unterstuetzten Pakete ist im Projekt.
+detected=0
+imports=()
+regs=()
+notes=()
+shims=()
+# shim_pkgs: erweitern, wenn ein weiteres Paket einen Dart-Shim bekommt.
+shim_pkgs='image_picker image_cropper webview_flutter'
+
 if grep -q '"name"[[:space:]]*:[[:space:]]*"file_picker"' "$packages"; then
-  imports="import 'package:file_picker/file_picker.dart' show FilePickerIO;"
-  registrations="  FilePickerIO.registerWith();"
+  detected=1
+  imports+=("import 'package:file_picker/file_picker.dart' show FilePickerIO;")
+  regs+=("  FilePickerIO.registerWith();")
 fi
 
-if [ -n "$registrations" ]; then
-  echo "==> Horizon-Registrant (1 Registrierung)"
+for p in $shim_pkgs; do
+  grep -q "\"name\"[[:space:]]*:[[:space:]]*\"${p}\"" "$packages" || continue
+  detected=1
+  shim_file="$root/dart_helpers/horizon_plugins/shim_$p.dart"
+  if [ -f "$shim_file" ] && grep -q '// HORIZON_SHIM: READY' "$shim_file"; then
+    shims+=("$shim_file")
+    imports+=("import 'shim_$p.dart' as shim_$p;")
+    regs+=("  shim_$p.registerHorizonShim();")
+  elif [ -f "$shim_file" ]; then
+    notes+=("// $p: Shim vorhanden (dart_helpers/horizon_plugins/shim_$p.dart), aber nicht READY")
+  else
+    notes+=("// $p: kein Shim unter dart_helpers/horizon_plugins/")
+  fi
+done
+
+if [ "$detected" -eq 1 ]; then
+  for s in "${shims[@]+"${shims[@]}"}"; do
+    cp -f "$s" "$generated/$(basename "$s")"
+  done
+  echo "==> Horizon-Registrant (${#regs[@]} Registrierungen, ${#shims[@]} Shims)"
   entry="$generated/horizon_main.dart"
   {
     echo '// Von build-dart-app.sh erzeugt - nicht von Hand pflegen.'
     echo "import 'package:${app_name:-app}/main.dart' as app;"
-    [ -n "$imports" ] && echo "$imports"
+    for i in "${imports[@]+"${imports[@]}"}"; do echo "$i"; done
+    [ "${#notes[@]}" -gt 0 ] && echo
+    for note in "${notes[@]+"${notes[@]}"}"; do echo "$note"; done
     echo
     echo 'void main() {'
-    echo "$registrations"
+    for r in "${regs[@]+"${regs[@]}"}"; do echo "$r"; done
     echo '  app.main();'
     echo '}'
   } > "$entry"
