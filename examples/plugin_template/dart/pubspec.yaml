@@ -1,0 +1,24 @@
+# Minimales Paket, nur damit `flutter pub get` eine Paketauflösung erzeugt -
+# dieselbe Idee wie ui_app/dart und my_nexus: kein `flutter create`-Gerüst,
+# keine Android-/iOS-Ordner, keine Assets. Der Kernel-Erzeuger von
+# build-dart-app.sh braucht package:flutter über .dart_tool/package_config.json,
+# und genau die Auflösung liefert dieses Paket.
+#
+# Sobald dieses Beispiel ein echtes Plugin (z.B. image_picker) benutzen soll:
+# Abhängigkeit hier ergänzen und `flutter pub get` laufen lassen - dann
+# erkennt build-dart-app.sh das Paket automatisch (Horizon-Registrant) und
+# bindet den passenden Dart-Shim aus dart_helpers/horizon_plugins/ ein.
+name: flutter_libnx_plugin_template
+description: Template-Beispiel für den Horizon-Embedder (Plugin-Anbindung)
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
