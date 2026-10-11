@@ -35,6 +35,7 @@
 #include <unordered_map>
 
 #include "embedder.h"
+#include "flutter_libnx/event_channel.h"
 #include "flutter_libnx/log.h"
 #include "flutter_libnx/standard_message_codec.h"
 
@@ -360,20 +361,24 @@ bool HandleUrlLauncher(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 // IntegerExtensions.toLocationPermission): 0=denied, 1=deniedForever,
 // 2=whileInUse, 3=always.
 
-bool HandleGeolocatorEventChannel(FLUTTER_API_SYMBOL(FlutterEngine) engine,
-                                  const FlutterPlatformMessage* message) {
-  std::string method;
-  StdValue args;
-  if (!DecodeStdMethodCall(message->message, message->message_size, &method,
-                           &args)) {
-    return false;
-  }
-  // listen/cancel sind das gesamte EventChannel-Protokoll.
-  if (method == "listen" || method == "cancel") {
-    Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
-    return true;
-  }
-  return false;
+// Die zwei geolocator-EventKanaele (Positions-/Dienststatus-Strom) laufen
+// ueber den gemeinsamen EventChannel-Helper (event_channel_horizon.cpp).
+// Events senden sie nie: Die Konsole hat kein Ortungssystem, also gibt es
+// keinen Dienst, der sie speisen koennte - listen/cancel werden nur ehrlich
+// quittiert.
+static EventChannel g_geolocator_updates(
+    "flutter.baseflow.com/geolocator_updates");
+static EventChannel g_geolocator_service_updates(
+    "flutter.baseflow.com/geolocator_service_updates");
+
+bool HandleGeolocatorUpdates(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                             const FlutterPlatformMessage* message) {
+  return g_geolocator_updates.HandleMessage(engine, message);
+}
+
+bool HandleGeolocatorServiceUpdates(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                    const FlutterPlatformMessage* message) {
+  return g_geolocator_service_updates.HandleMessage(engine, message);
 }
 
 bool HandleGeolocator(FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -851,9 +856,9 @@ ChannelRegistry MakeRegistry() {
   ChannelRegistry r;
   // Kanäle mit eigenem Codec/Protokoll (dekodieren die Nachricht selbst).
   r.raw["miguelruivo.flutter.plugins.filepicker"] = HandleFilePicker;
-  r.raw["flutter.baseflow.com/geolocator_updates"] = HandleGeolocatorEventChannel;
+  r.raw["flutter.baseflow.com/geolocator_updates"] = HandleGeolocatorUpdates;
   r.raw["flutter.baseflow.com/geolocator_service_updates"] =
-      HandleGeolocatorEventChannel;
+      HandleGeolocatorServiceUpdates;
   // StandardMethodCodec: method + args, Antwort ueber EncodeStd*.
   r.method["plugins.flutter.io/path_provider"] = HandlePathProvider;
   r.method["plugins.flutter.io/shared_preferences"] = HandleSharedPreferences;
