@@ -64,5 +64,5 @@ static-инстансом `XPlatform.instance`; на Horizon нет устрой
 
 - `set -euo pipefail`, идемпотентность, shellcheck без `severity=error`.
 - Контракт скрипта меняется — запись в `docs/macos-migration.md`.
-- Комментарии в `plugins_horizon.cpp` — по-немецки (стиль upstream).
+- Комментарии и документация — по-русски (см. AGENTS.md §7).
 - `.ps1` не удаляем.
