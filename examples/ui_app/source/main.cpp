@@ -657,6 +657,12 @@ void PlatformMessageCallback(const FlutterPlatformMessage* message,
 // gen_snapshot stellt den Namen einen Unterstrich voran - die Konvention von
 // Mach-O, die es auch bei ELF-Ausgabe beibehält. Die asm-Bindung stellt den
 // Bezug her, ohne dass die Assembly angefasst werden muss.
+//
+// FLUTTER_LIBNX_DEBUG (Makefile, MODE=debug): Es gibt dann kein app_aot.s -
+// der Kernel liegt als kernel_blob.bin im RomFS und wird zur Laufzeit
+// uebersetzt. Die Deklarationen muessen deshalb mit verschwinden, sonst
+// schlaegt der Link fehl (die Symbole existieren nicht).
+#ifndef FLUTTER_LIBNX_DEBUG
 extern "C" {
 extern const uint8_t kDartVmSnapshotData[] asm("_kDartVmSnapshotData");
 extern const uint8_t kDartVmSnapshotInstructions[]
@@ -665,6 +671,35 @@ extern const uint8_t kDartIsolateSnapshotData[] asm("_kDartIsolateSnapshotData")
 extern const uint8_t kDartIsolateSnapshotInstructions[]
     asm("_kDartIsolateSnapshotInstructions");
 }
+#endif  // FLUTTER_LIBNX_DEBUG
+
+// VM-Dienst-Schalter fuer den Debug-Build. Die Engine liest ihre Kommandozeile
+// aus FlutterProjectArgs.command_line_argc/argv (embedder.cc:2056-2064) und
+// baut daraus die Settings - auch den VM-Dienst.
+//
+// Warum ueberhaupt: Dart-Logs (`developer.log`, GetX) landen im VM nur, wenn
+// sich ein Client auf den Dienststrom "Logging" angemeldet hat
+// (runtime/vm/service.cc, SendLogEvent). Ohne Client geht der Logeintrag
+// verloren - unabhaengig vom Buildmodus. Der Dienst ist die Abhilfe, ohne die
+// VM anzufassen.
+//
+// Vorgabewerte: Der Dienst laeuft an, sobald `--disable-vm-service` fehlt
+// (shell/common/switches.cc:240). Der Host steht sonst auf 127.0.0.1 und waere
+// vom Mac aus nicht erreichbar, deshalb 0.0.0.0. Der Port 0 heisst "beliebig";
+// dann waehlt die VM selbst - der echte Port steht dann im Log. Das Auth-Code-
+// Abschalten ist reine Entwicklungskosmetik und gehoert in keinen Release.
+#ifdef FLUTTER_LIBNX_DEBUG
+static const char* kVmServiceArgs[] = {
+    // Der ERSTE Eintrag ist fuer die Engine der Programmname, kein Schalter
+    // (embedder.h:2493). Ohne diesen Platzhalter kaeme --enable-vm-service
+    // dort zu liegen und waere wirkungslos - der Dienst bliebe stumm.
+    "flutter_libnx",
+    "--enable-vm-service",
+    "--vm-service-host=0.0.0.0",
+    "--vm-service-port=0",
+    "--disable-service-auth-codes",
+};
+#endif  // FLUTTER_LIBNX_DEBUG
 
 int main(int argc, char* argv[]) {
   flutter_libnx::LogConfig log_config;
@@ -792,10 +827,13 @@ int main(int argc, char* argv[]) {
 
   // Nachweis, dass die Snapshot-Daten den Weg durch Linker und NRO-Verpackung
   // unbeschadet ueberstanden haben. Das Magic stand im aot_poc schon einmal
-  // auf dem Pruefstand.
+  // auf dem Pruefstand. Im Debug-Build gibt es keinen eingelinkten Snapshot -
+  // dann laeuft die Pruefung ins Leere und wird uebersprungen.
+#ifndef FLUTTER_LIBNX_DEBUG
   uint32_t magic = 0;
   std::memcpy(&magic, kDartVmSnapshotData, sizeof(magic));
   LOG_INFO("VM-Snapshot-Magic: 0x%08x (erwartet 0xdcdcf5f5)", magic);
+#endif  // FLUTTER_LIBNX_DEBUG
 
   // Speicherlage vor dem Start der Engine.
   //
@@ -870,10 +908,25 @@ int main(int argc, char* argv[]) {
   project.icu_data_path = "romfs:/icudtl.dat";
   project.log_message_callback = EngineLog;
   project.platform_message_callback = PlatformMessageCallback;
+#ifndef FLUTTER_LIBNX_DEBUG
   project.vm_snapshot_data = kDartVmSnapshotData;
   project.vm_snapshot_instructions = kDartVmSnapshotInstructions;
   project.isolate_snapshot_data = kDartIsolateSnapshotData;
   project.isolate_snapshot_instructions = kDartIsolateSnapshotInstructions;
+#else
+  // Debug (JIT): keine Snapshot-Zeiger. Die Engine erkennt am
+  // nicht-vorkompilierten Zustand der VM selbst, dass sie den Kernel aus dem
+  // RomFS lesen soll - verlangt wird da kernel_blob.bin in den Assets
+  // (embedder.cc:2089-2099). Die uebrigen Snapshot-Felder sind optional
+  // (PopulateJITSnapshotMappingCallbacks, embedder.cc:1768).
+  //
+  // Dafuer bekommt die Engine ihre Kommandozeile: daraus entstehen die
+  // Settings und damit der VM-Dienst (siehe kVmServiceArgs oben).
+  project.command_line_argc = static_cast<int>(sizeof(kVmServiceArgs) /
+                                              sizeof(kVmServiceArgs[0]));
+  project.command_line_argv = kVmServiceArgs;
+  LOG_INFO("Modus: debug (JIT), VM-Dienst angefordert auf 0.0.0.0");
+#endif  // FLUTTER_LIBNX_DEBUG
 
   // Ohne dieses Feld bleibt es bei settings.leak_vm = true (common/settings.h
   // :278, ausgewertet in embedder.cc:2079): FlutterEngineShutdown baut die

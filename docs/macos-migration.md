@@ -254,8 +254,9 @@
 > `fetch-reference.sh`, `probe-app-toolchain.sh`). Оригиналы `.ps1`
 > **не удаляются и не переименовываются** — Windows/WSL-поток сохранён.
 > Изменения контрактов (getopts вместо `param()`):
-> - `build-dart-app.sh --project PFAD [--example NAME] |--product` (дефолт
->   примера `examples/ui_app`, проекта — `examples/<example>/dart`);
+> - `build-dart-app.sh --project PFAD [--example NAME] [--mode release|debug]`
+>   (дефолт примера `examples/ui_app`, проекта — `examples/<example>/dart`;
+>   `--product` сохранён как deprecated-синоним `--mode release`);
 > - `build-ui-app.sh` — без аргументов (как оригинал);
 > - `build-aot-poc.sh` — без аргументов; `GEN_SNAPSHOT` для override;
 > - `dkp.sh <WorkDir> <Befehl...>` — нативный devkitPro, docker — fallback;
@@ -267,6 +268,22 @@
 > `$FLUTTER_HOME` (дефолт `~/flutter-3.41.6`), `windows-x64\icudtl.dat` →
 > `darwin-arm64/icudtl.dat` (+поиск), финал «WSL bash /mnt/e/...» → локальный
 > `$root/scripts/rebuild-all.sh`.
+
+**Контракт режимов сборки** (спринт «debug и отладка», `docs/build-modes-plan.md`):
+
+- `gn-gen-horizon.sh [--mode release|debug]` — debug даёт `is_debug=true`,
+  `flutter_runtime_mode=debug`, `dart_runtime_mode=develop`,
+  `dart_support_perfetto=false` и каталог `out/horizon_debug_arm64`;
+- `rebuild-all.sh [--mode release|debug] ПРИМЕР` — в debug выпадают шаги
+  `gen_snapshot` и app-aot-снапшот;
+- `build-dart-app.sh --mode release|debug` — release собирает AOT
+  (`-Ddart.vm.product=true`), debug оставляет JIT-ядро (`kernel_blob.bin`) в
+  RomFS и удаляет `app_aot.s`;
+- `MODE` в `Makefile` примеров выбирает `ENGINE_OUT` **и** включает
+  `FLUTTER_LIBNX_DEBUG` (в `main.cpp` — ветки JIT и свитчи VM-сервиса);
+- `OUT`/`ENGINE_OUT` из окружения, не совпадающие с режимом, приводят к
+  явной ошибке: `gn` пишет `args.gn` до проверки и молча сломал бы соседний
+  build-каталог.
 
 | Скрипт | Назначение | Зависимости | macOS-риски | Приоритет |
 |---|---|---|---|---|

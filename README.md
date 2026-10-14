@@ -94,6 +94,12 @@ Steps 1–5 are one-time (per engine update). After that, iterating on an app
 is steps 6–7. `scripts/log-listener.ps1` receives the console's log over TCP
 (the console connects to your PC, so NAT/firewalls don't get in the way).
 
+> **Режимы сборки (порт macOS).** Описанная выше цепочка — историческая,
+> Windows/WSL. Актуальная для macOS: те же bash-скрипты с флагом режима —
+> `gn-gen-horizon.sh --mode release|debug`, `build-dart-app.sh --mode
+> release|debug`, `rebuild-all.sh --mode release|debug`; в debug additionally
+> поднимается VM-сервис. Обоснование и ограничения — `docs/build-modes-plan.md`.
+
 ### Bringing your own app
 
 ```powershell
@@ -221,6 +227,12 @@ Schritte 1–5 sind einmalig (je Engine-Stand). Danach besteht die Iteration
 an einer App aus den Schritten 6–7. `scripts/log-listener.ps1` empfängt das
 Konsolen-Log über TCP (die Konsole verbindet sich zum PC — NAT und Firewall
 stehen so nicht im Weg).
+
+> **Режимы сборки (порт macOS).** Описанная выше цепочка — историческая,
+> Windows/WSL. Актуальная для macOS: те же bash-скрипты с флагом режима —
+> `gn-gen-horizon.sh --mode release|debug`, `build-dart-app.sh --mode
+> release|debug`, `rebuild-all.sh --mode release|debug`; в debug дополнительно
+> поднимается VM-сервис. Обоснование и ограничения — `docs/build-modes-plan.md`.
 
 ### Eigene App mitbringen
 

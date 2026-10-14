@@ -13,7 +13,14 @@
 #   build-dart-app.sh --project /pfad/app     -> beliebiges Projekt
 #   build-dart-app.sh --example my_nexus --project /pfad/app
 #                                             -> Ausgabe nach examples/my_nexus
-#   build-dart-app.sh --product               -> -Ddart.vm.product=true
+#   build-dart-app.sh --mode debug            -> JIT-Kernel fuer den Debug-Build
+#
+# Modi (siehe docs/build-modes-plan.md):
+#   release (Vorgabe)  flutter build bundle + gen_kernel_aot --aot, Ergebnis
+#                      app.dill -> rebuild-all.sh -> app_aot.s -> .nro
+#   debug               flutter build bundle --debug, Kernel bleibt als
+#                      kernel_blob.bin im RomFS. rebuild-all.sh ueberspringt
+#                      gen_snapshot; die Engine laeuft im JIT-Modus.
 #
 # WICHTIG zum Projektpfad: wie im Original liegen Ausgabeziele (generated/,
 # romfs/) NEBEN dem gewaehlten Beispiel (--example, Standard examples/ui_app),
@@ -103,9 +110,11 @@ fi
 
 project=""
 example="ui_app"
-product=0
+mode="release"
 usage() {
-  echo "Verwendung: $0 [--project PFAD] [--example NAME] [--product]" >&2
+  echo "Verwendung: $0 [--project PFAD] [--example NAME] [--mode release|debug]" >&2
+  echo "  --mode release (Vorgabe): AOT, app.dill -> app_aot.s -> .nro" >&2
+  echo "  --mode debug:             JIT, kernel_blob.bin im RomFS" >&2
   exit 1
 }
 while [ $# -gt 0 ]; do
@@ -114,11 +123,23 @@ while [ $# -gt 0 ]; do
     --project=*) project="${1#*=}"; shift ;;
     --example) example="${2:?--example braucht einen Namen}"; shift 2 ;;
     --example=*) example="${1#*=}"; shift ;;
-    --product) product=1; shift ;;
+    --mode)   mode="${2:?--mode braucht einen Wert}"; shift 2 ;;
+    --mode=*) mode="${1#*=}"; shift ;;
+    # Frueher hiess der Weg in den Release-Build "--product". Der Auslieferungs-
+    # build setzt das define dart.vm.product inzwischen selbst (siehe unten),
+    # deshalb ist der Schalter nur noch ein Synonym fuer --mode release.
+    --product)
+      echo "WARNUNG: --product ist deprecated, benutze --mode release" >&2
+      mode="release"; shift ;;
     -h|--help) usage ;;
     *) echo "Unbekanntes Argument: $1" >&2; usage ;;
   esac
 done
+
+case "$mode" in
+  release|debug) ;;
+  *) echo "Unbekannter Modus: $mode (erlaubt: release, debug)" >&2; exit 1 ;;
+esac
 
 if [ -z "$project" ]; then project="$root/examples/$example/dart"; fi
 project="$(cd "$project" && pwd)"
@@ -129,9 +150,15 @@ generated="$app/generated"
 romfs="$app/romfs"
 assets="$romfs/flutter_assets"
 
-for p in "$sdk" "$platform" "$icu" "$project/pubspec.yaml"; do
+# Die Produkt-Dill wird nur fuer den AOT-Kern gebraucht. Im Debug-Modus
+# uebersetzt der Flutter-Compiler selbst, und zwar mit der Nicht-Produkt-Dill
+# aus dem Bundle - die braucht dieses Skript gar nicht.
+for p in "$sdk" "$icu" "$project/pubspec.yaml"; do
   [ -e "$p" ] || { echo "Nicht gefunden: $p" >&2; exit 1; }
 done
+if [ "$mode" = "release" ]; then
+  [ -e "$platform" ] || { echo "Nicht gefunden: $platform" >&2; exit 1; }
+fi
 [ -x "$flutter/bin/flutter" ] || die \
   "Flutter-SDK fehlt unter $flutter (FLUTTER_HOME) - erst scripts/setup-macos.sh"
 
@@ -139,39 +166,19 @@ mkdir -p "$generated" "$romfs"
 echo "==> Projekt: $project"
 pick_nro_icon "$project" "$app"
 
-# --- 1. Assets --------------------------------------------------------------
-echo '==> flutter build bundle'
+# --- 1. Paketaufloesung -----------------------------------------------------
+# package:flutter liegt als Quellpaket im SDK; `flutter build bundle` wuerde
+# die Aufloesung zwar auch mit erzeugen - aber der Registrant (Schritt 2)
+# braucht package_config.json VOR dem Bundle, sonst fehlen die Plattform-
+# Registrierungen im Debug-Kern. Desbuch laeuft `flutter pub get` hier explizit
+# vor. Der Aufruf ist idempotent und kostet bei unveraendertem pubspec.lock
+# nur eine Zeile.
+echo '==> flutter pub get'
 (
   cd "$project"
-  "$flutter/bin/flutter" build bundle
+  "$flutter/bin/flutter" pub get
 )
-bundle="$project/build/flutter_assets"
-[ -d "$bundle" ] || { echo "Nicht gefunden: $bundle" >&2; exit 1; }
 
-# JIT-Artefakte bleiben draussen (siehe PS1-Kommentar: kernel_blob.bin alleine
-# waere >40 MB in einer NRO, die sonst 17 MB wiegt).
-jit_only='kernel_blob.bin vm_snapshot_data isolate_snapshot_data .last_build_id'
-
-rm -rf "$assets"
-mkdir -p "$assets"
-copied=0
-while IFS= read -r f; do
-  rel="${f#"$bundle"/}"
-  base="$(basename "$f")"
-  for j in $jit_only; do [ "$base" = "$j" ] && continue 2; done
-  mkdir -p "$(dirname "$assets/$rel")"
-  cp -f "$f" "$assets/$rel"
-  copied=$((copied + 1))
-done < <(find "$bundle" -type f)
-
-size_kb="$(du -sk "$assets" | awk '{print $1}')"
-printf '    %s Dateien, %.2f MB\n' "$copied" "$(awk -v k="$size_kb" 'BEGIN{printf "%.2f", k/1024}')"
-
-cp -f "$icu" "$romfs/icudtl.dat"
-
-# --- 2. Kernel --------------------------------------------------------------
-# package:flutter liegt als Quellpaket im SDK; `flutter build bundle` oben hat
-# die Paketaufloesung erzeugt.
 packages="$project/.dart_tool/package_config.json"
 entry="$project/lib/main.dart"
 for p in "$packages" "$entry"; do
@@ -248,22 +255,92 @@ if [ "$detected" -eq 1 ]; then
   } > "$entry"
 fi
 
-echo "==> Kernel erzeugen$([ "$product" -eq 1 ] && echo ' (product)')"
-dill="$generated/app.dill"
-defines=()
-[ "$product" -eq 1 ] && defines=(-Ddart.vm.product=true)
-"$sdk/bin/dartaotruntime" "$sdk/bin/snapshots/gen_kernel_aot.dart.snapshot" \
-  --platform "$platform" \
-  --target=flutter \
-  --aot \
-  --packages "$packages" \
-  "${defines[@]+"${defines[@]}"}" \
-  -o "$dill" \
-  "$entry"
+# --- 3. Assets --------------------------------------------------------------
+# Im Debug-Modus ist der Einstiegspunkt der Registrant: `flutter build bundle`
+# uebersetzt dann selbst zum JIT-Kern (kernel_blob.bin), den die Engine zur
+# Laufzeit aus dem RomFS laedt. Ohne -t wuerde lib/main.dart kompiliert und
+# die Registrierungen fehlten.
+#
+# Belegt: ein Ziel ausserhalb des Paketverzeichnisses ist erlaubt. Gegenprobe
+# mit einem kaputten Import darin bricht den Build ab, das -t wird also
+# tatsaechlich ausgewertet und nicht stillschweigend verworfen.
+echo "==> flutter build bundle ($mode)"
+(
+  cd "$project"
+  if [ "$mode" = "debug" ]; then
+    "$flutter/bin/flutter" build bundle --debug -t "$entry"
+  else
+    "$flutter/bin/flutter" build bundle
+  fi
+)
+bundle="$project/build/flutter_assets"
+[ -d "$bundle" ] || { echo "Nicht gefunden: $bundle" >&2; exit 1; }
 
-# --- 3. Weiter lokal (kein WSL) --------------------------------------------
-# Die Assembly entsteht bewusst nicht hier: sie braucht den selbst gebauten
-# clang_x64/gen_snapshot_product (Snapshot-Hash aus 15 geaenderten
-# Dart-Quellen; kein Compressed Pointers) - siehe scripts/rebuild-all.sh.
-echo
-echo "Weiter mit: $root/scripts/rebuild-all.sh $example"
+# Im AOT-Build bleiben die JIT-Artefakte draussen (siehe PS1-Kommentar:
+# kernel_blob.bin alleine waere >40 MB in einer NRO, die sonst 17 MB wiegt) -
+# sie werden von der Engine nicht gelesen. Im Debug-Build ist kernel_blob.bin
+# gerade die Anwendung.
+if [ "$mode" = "debug" ]; then
+  jit_only='.last_build_id'
+else
+  jit_only='kernel_blob.bin vm_snapshot_data isolate_snapshot_data .last_build_id'
+fi
+
+rm -rf "$assets"
+mkdir -p "$assets"
+copied=0
+while IFS= read -r f; do
+  rel="${f#"$bundle"/}"
+  base="$(basename "$f")"
+  for j in $jit_only; do [ "$base" = "$j" ] && continue 2; done
+  mkdir -p "$(dirname "$assets/$rel")"
+  cp -f "$f" "$assets/$rel"
+  copied=$((copied + 1))
+done < <(find "$bundle" -type f)
+
+size_kb="$(du -sk "$assets" | awk '{print $1}')"
+printf '    %s Dateien, %.2f MB\n' "$copied" "$(awk -v k="$size_kb" 'BEGIN{printf "%.2f", k/1024}')"
+
+cp -f "$icu" "$romfs/icudtl.dat"
+
+# --- 4. Kernel --------------------------------------------------------------
+if [ "$mode" = "release" ]; then
+  # Defines wie in Flutter's compile.dart (buildModeOptions, BuildMode.release).
+  # dart.vm.product ist das, woran kReleaseMode/kDebugMode im Framework hängen:
+  #   kReleaseMode = bool.fromEnvironment('dart.vm.product')   (constants.dart:25)
+  #   kDebugMode   = !kReleaseMode && !kProfileMode            (constants.dart:64)
+  # Ohne dieses define war die bisherige AOT-NRO im Framework "debug" - die
+  # Verzweigung hat keine Auswirkung auf die Sichtbarkeit von Logausgaben
+  # (siehe docs/build-modes-plan.md, Abschnitt 3), aber sie passte nicht zur
+  # Bezeichnung.
+  echo "==> Kernel erzeugen (AOT, dart.vm.product)"
+  dill="$generated/app.dill"
+  "$sdk/bin/dartaotruntime" "$sdk/bin/snapshots/gen_kernel_aot.dart.snapshot" \
+    --platform "$platform" \
+    --target=flutter \
+    --aot \
+    --packages "$packages" \
+    -Ddart.vm.profile=false \
+    -Ddart.vm.product=true \
+    -o "$dill" \
+    "$entry"
+
+  # --- 5. Weiter lokal (kein WSL) ------------------------------------------
+  # Die Assembly entsteht bewusst nicht hier: sie braucht den selbst gebauten
+  # clang_arm64/gen_snapshot_product (Snapshot-Hash aus 15 geaenderten
+  # Dart-Quellen; kein Compressed Pointers) - siehe scripts/rebuild-all.sh.
+  echo
+  echo "Weiter mit: $root/scripts/rebuild-all.sh $example"
+else
+  # Im Debug-Modus entfaellt app.dill: die Engine laeuft im JIT und liest den
+  # Kern direkt aus dem RomFS. gen_snapshot wird darum nicht gebraucht und in
+  # rebuild-all.sh uebersprungen.
+  #
+  # Wichtig: eine liegengebliebene app_aot.s vom letzten AOT-Lauf wird hier
+  # entfernt. Das Makefile uebernimmt jede *.s aus generated/ und wuerde sie
+  # sonst mitassemblieren - 450k Zeilen Fuellmaterial fuer einen Build, der
+  # die Symbole gar nicht referenziert.
+  rm -f "$generated/app_aot.s" "$generated/app.dill"
+  echo
+  echo "Weiter mit: $root/scripts/rebuild-all.sh --mode debug $example"
+fi

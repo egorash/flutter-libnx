@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Erster gn gen für das noch nicht existierende Target "horizon".
+# gn gen für das Horizon-Target "horizon".
 #
-# Erwartung beim ersten Lauf: Fehlschlag. Der Zweck ist, die Fehlermeldung zu
-# bekommen, statt sie zu erraten.
+# Aufruf:
+#   gn-gen-horizon.sh                  -> release (AOT), out/horizon_release_arm64
+#   gn-gen-horizon.sh --mode debug     -> debug (JIT-VM + VM-Dienst),
+#                                         out/horizon_debug_arm64
+#
+# Der Modus steckt an genau zwei Stellen: is_debug sowie flutter_runtime_mode /
+# dart_runtime_mode. Alles andere (Target, CPU, Skia, Buildtools) bleibt in
+# beiden Ausprägungen gleich - ein Debug-Build ist also keine Sonderwelt,
+# sondern derselbe Code mit anderen Schaltern.
 set -uo pipefail
 
 # Gemeinsame Helfer (REPO, die, require_cmd) - siehe scripts/common.sh.
@@ -10,7 +17,62 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 GN="$SRC/flutter/third_party/gn/gn"
-OUT="${OUT:-out/horizon_release_arm64}"
+
+MODE="release"
+usage() {
+  echo "Verwendung: $0 [--mode release|debug]" >&2
+  exit 1
+}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --mode)   MODE="${2:?--mode braucht einen Wert}"; shift 2 ;;
+    --mode=*) MODE="${1#*=}"; shift ;;
+    -h|--help) usage ;;
+    *) echo "Unbekanntes Argument: $1" >&2; usage ;;
+  esac
+done
+
+# Pro Modus: der is_debug-Schalter, die beiden Runtime-Modi und das
+# Ausgabeverzeichnis.
+#
+# dart_runtime_mode ist NICHT "debug": das ist der Flutter-Modus, fuer den
+# Dart gilt develop/profile/release (third_party/dart/runtime/BUILD.gn:25).
+# Die Zuordnung ist dieselbe wie in Flutter's eigenem tools/gn (Zeile 585):
+# flutter_runtime_mode=debug -> dart_runtime_mode=develop.
+case "$MODE" in
+  release)
+    gn_is_debug=false
+    gn_flutter_mode="release"
+    gn_dart_mode="release"
+    default_out="out/horizon_release_arm64"
+    gn_extra=""
+    ;;
+  debug)
+    # debug heisst hier zwei Dinge zugleich: der Framework-Code laeuft mit
+    # Assertions, und die Dart-VM ist eine JIT-VM (dart_runtime_mode=develop).
+    # Nur Letzteres liefert den VM-Dienst und damit Logs/DevTools.
+    gn_is_debug=true
+    gn_flutter_mode="debug"
+    gn_dart_mode="develop"
+    default_out="out/horizon_debug_arm64"
+    # Perfetto gibt es auf Horizon nicht: base/build_config.h kennt kein
+    # Zielos und bricht mit "OS not supported" ab. In release ist es ohnehin
+    # aus (runtime_args.gni:98 koppelt es an dart_runtime_mode == "release"),
+    # im Debug-Modus nicht - dort muss es ausdruecklich abgeschaltet werden.
+    # Nebeneffekt: der Dart-Profiler faellt mit weg (Kommentar dort:92).
+    gn_extra="dart_support_perfetto=false"
+    ;;
+  *) die "Unbekannter Modus: $MODE (erlaubt: release, debug)" ;;
+esac
+
+# env.sh setzt OUT auf das Release-Verzeichnis. Ohne diese Pruefung schreibt
+# `gn-gen-horizon.sh --mode debug` genau dorthin - und macht den Release-Build
+# kaputt, weil gn args.gn VOR der Auswertung schreibt. Deshalb: ein gesetztes
+# OUT muss zum Modus passen, sonst Abbruch mit Klartext.
+if [ -n "${OUT:-}" ] && [ "$OUT" != "$default_out" ]; then
+  die "OUT=$OUT (aus der Umgebung) passt nicht zu --mode $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+fi
+OUT="$default_out"
 
 # GN ruft Hilfsskripte über `vpython3` auf, das aus depot_tools kommt.
 # ~/bin enthält das ohne root beschaffte pkg-config (siehe extract-pkgconf.sh).
@@ -20,7 +82,7 @@ export DEPOT_TOOLS_UPDATE=0
 cd "$SRC" || exit 1
 
 echo "==> gn gen $OUT"
-echo "    target_os=horizon target_cpu=arm64"
+echo "    target_os=horizon target_cpu=arm64 mode=$MODE (is_debug=$gn_is_debug)"
 echo
 
 DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
@@ -34,6 +96,8 @@ DART_VERSION="${DART_VERSION:-02abc57898bebc334a997e609ce5827c8ef207d7}"
 # flutter_runtime_mode=release ist die Kernentscheidung des Projekts: Dart AOT
 # statt JIT. Nebenbei schaltet Dart dadurch Perfetto und den Profiler ab
 # (runtime/runtime_args.gni:98), die auf Horizon ohnehin nicht übersetzen.
+# Im Modus debug ist es genau umgekehrt - JIT-VM und VM-Dienst, den es ohne
+# subscribenden Client ohnehin nicht zu sehen gibt.
 #
 # dart_use_fallback_root_certificates bindet die Wurzelzertifikate fest ins
 # Programm ein. Auf Horizon ist das keine Notlösung, sondern der einzige Weg:
@@ -41,10 +105,11 @@ DART_VERSION="${DART_VERSION:-02abc57898bebc334a997e609ce5827c8ef207d7}"
 # lesen ließe. Ohne das Flag bleibt `root_certificates_pem_length` undefiniert
 # und jede HTTPS-Verbindung wäre unmöglich.
 "$GN" gen "$OUT" \
-  --args="target_os=\"horizon\" target_cpu=\"arm64\" is_debug=false \
-flutter_runtime_mode=\"release\" dart_runtime_mode=\"release\" \
+  --args="target_os=\"horizon\" target_cpu=\"arm64\" is_debug=$gn_is_debug \
+flutter_runtime_mode=\"$gn_flutter_mode\" dart_runtime_mode=\"$gn_dart_mode\" \
 dart_use_compressed_pointers=false \
 dart_use_fallback_root_certificates=true \
+$gn_extra \
 buildtools_path=\"//flutter/buildtools\" \
 shell_enable_gl=true test_enable_gl=false test_enable_vulkan=false \
 devkitpro_root=\"$DEVKITPRO\" engine_version=\"$ENGINE_VERSION\" \

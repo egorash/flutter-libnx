@@ -57,9 +57,25 @@ CFLAGS	+=	-DFLUTTER_LIBNX_APP_ID=\"$(TARGET)\"
 # direkt ueber CFLAGS und LIBS.
 #---------------------------------------------------------------------------------
 ENGINE_SRC	?=	$(HOME)/engine/flutter/engine/src
-ENGINE_OUT	?=	$(ENGINE_SRC)/out/horizon_release_arm64
-ENGINE_LIB	:=	$(ENGINE_OUT)/obj/flutter/shell/platform/embedder/libflutter_engine.a
 ENGINE_INC	:=	$(ENGINE_SRC)/flutter/shell/platform/embedder
+
+# MODE waehlt Engine-Ausgabe und C++-Variante. scripts/rebuild-all.sh und
+# scripts/build-example-wsl.sh setzen ihn; ohne MODE bleibt alles beim
+# gewohnten Release-Build. FLUTTER_LIBNX_DEBUG schaltet in main.cpp die
+# JIT-Zweige um (kein AOT-Snapshot, VM-Dienst-Schalter) - ohne diese Trennung
+# waere ein Debug-Link an den AOT-Symbolen kaputt.
+#
+# Reihenfolge ist wichtig: ENGINE_LIB ist ein := (sofort ausgewertet) und
+# braucht ENGINE_OUT bereits fertig.
+MODE	?=	release
+ifeq ($(MODE),debug)
+ENGINE_OUT	?=	$(ENGINE_SRC)/out/horizon_debug_arm64
+CFLAGS	+=	-DFLUTTER_LIBNX_DEBUG=1
+else
+ENGINE_OUT	?=	$(ENGINE_SRC)/out/horizon_release_arm64
+endif
+
+ENGINE_LIB	:=	$(ENGINE_OUT)/obj/flutter/shell/platform/embedder/libflutter_engine.a
 
 CFLAGS	+=	-I$(ENGINE_INC)
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++20
