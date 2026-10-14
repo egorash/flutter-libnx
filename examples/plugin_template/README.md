@@ -24,8 +24,8 @@ bash scripts/build-example-wsl.sh plugin_template                # make -> plugi
 
 ## Как добавить новый плагин (чеклист)
 
-Есть два пути (подробно — `docs/plugins-plan.md`,
-`docs/plugin-plan-my-nexus.md`, `docs/macos-migration.md`).
+Есть два пути (подробно — `docs/infra.md`; планы —
+`docs/plugins-plan.md`, `docs/plugin-plan-my-nexus.md`, `docs/macos-migration.md`).
 
 ### Путь A — C++-хендлер канала (простой протокол)
 
