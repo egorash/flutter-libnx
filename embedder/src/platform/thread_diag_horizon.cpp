@@ -126,10 +126,12 @@ void flutter_libnx_scan_heap(const char* label) {
     if (info.type != MemType_Heap || info.attr != 0 || info.perm != Perm_Rw) {
       anomalies++;
       anomaly_bytes += info.size;
-      // Begrenzung schuetzt die TCP-Senke vor einer Flut, falls der Heap in
-      // viele abweichende Regionen zerfallen ist.
+      // Ограничение защищает TCP-сток от потока строк, если куча распалась
+      // на множество отклоняющихся регионов. Также DEBUG: построчная
+      // диагностика выдала бы до 24 строк при каждом старте и неверно красила
+      // счётчик ошибок — оценка в сводке лога ниже.
       if (anomalies <= 24) {
-        LOG_ERROR("Heap-Scan[%s]: %p +%llu KB type=%u attr=0x%x perm=0x%x",
+        LOG_DEBUG("Heap-Scan[%s]: %p +%llu KB type=%u attr=0x%x perm=0x%x",
                   label, reinterpret_cast<void*>(info.addr),
                   static_cast<unsigned long long>(info.size / 1024), info.type,
                   info.attr, info.perm);
@@ -142,9 +144,13 @@ void flutter_libnx_scan_heap(const char* label) {
     }
     addr = info.addr + info.size;
   }
-  LOG_INFO("Heap-Scan[%s]: %d Regionen, %d abweichend (%llu KB)", label,
-           regions, anomalies,
-           static_cast<unsigned long long>(anomaly_bytes / 1024));
+  if (anomalies > 0) {
+    LOG_WARN("Heap-Scan[%s]: %d Regionen, %d abweichend (%llu KB)", label,
+             regions, anomalies,
+             static_cast<unsigned long long>(anomaly_bytes / 1024));
+  } else {
+    LOG_INFO("Heap-Scan[%s]: %d Regionen, keine Abweichungen", label, regions);
+  }
 }
 
 // Erbschaftsbereinigung (Reparatur zum sporadischen Absturz).

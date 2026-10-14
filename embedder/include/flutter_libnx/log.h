@@ -42,7 +42,11 @@ struct LogConfig {
   const char* remote_host = nullptr;
   uint16_t remote_port = 28800;
 
-  LogLevel min_level = LogLevel::kDebug;
+  // Нормальный режим: INFO и выше. DEBUG по умолчанию выключен —
+  // тяжёлые диагностические строки (Frames-Report, регионы Heap-Scan,
+  // пиксельная проба видео, трассировка клавиш) помечены LOG_DEBUG
+  // и видны только по запросу (поднять до kDebug).
+  LogLevel min_level = LogLevel::kInfo;
 };
 
 // Gibt false zurück, wenn keine einzige Senke geöffnet werden konnte.
@@ -54,6 +58,12 @@ bool LogHasNxlink();
 
 // true, wenn die TCP-Senke steht. Erst nach LogInit aussagekräftig.
 bool LogHasRemote();
+
+// true, если строка этого уровня действительно будет записана сейчас.
+// Для дорогих диагностик, которые должны выполняться только при включённом
+// логе: одного LOG_DEBUG недостаточно — аргументы вычисляются до вызова
+// макроса.
+bool LogEnabled(LogLevel level);
 
 void LogWrite(LogLevel level, const char* file, int line, const char* fmt, ...)
     __attribute__((format(printf, 4, 5)));

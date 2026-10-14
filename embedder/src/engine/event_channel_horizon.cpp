@@ -31,7 +31,7 @@ bool EventChannel::HandleMessage(FLUTTER_API_SYMBOL(FlutterEngine) engine,
   // listen/cancel sind das gesamte EventChannel-Protokoll.
   if (method == "listen") {
     if (!listening_) {
-      LOG_INFO("%s: Stream geoeffnet (listen)", name_.c_str());
+      LOG_DEBUG("%s: Stream geoeffnet (listen)", name_.c_str());
       listening_ = true;
     }
     Respond(engine, message, EncodeStdSuccess(StdValue::Null()));
@@ -39,7 +39,7 @@ bool EventChannel::HandleMessage(FLUTTER_API_SYMBOL(FlutterEngine) engine,
   }
   if (method == "cancel") {
     if (listening_) {
-      LOG_INFO("%s: Stream geschlossen (cancel)", name_.c_str());
+      LOG_DEBUG("%s: Stream geschlossen (cancel)", name_.c_str());
       listening_ = false;
     }
     Respond(engine, message, EncodeStdSuccess(StdValue::Null()));

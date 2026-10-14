@@ -256,6 +256,10 @@ bool LogHasRemote() {
   return g_remote_fd >= 0;
 }
 
+bool LogEnabled(LogLevel level) {
+  return g_initialized && level >= g_config.min_level;
+}
+
 void LogWrite(LogLevel level, const char* file, int line, const char* fmt, ...) {
   if (!g_initialized || level < g_config.min_level) {
     return;
