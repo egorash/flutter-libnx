@@ -161,7 +161,7 @@ void NoteFramePresented() {
         worst_ns = delta;
       }
       if (++count == 120) {
-        LOG_INFO("Frames: %.1f/s im Zeichnen, schlechtester Abstand %.0f ms",
+        LOG_DEBUG("Frames: %.1f/s im Zeichnen, schlechtester Abstand %.0f ms",
                  120.0 * 1e9 / static_cast<double>(sum_ns),
                  static_cast<double>(worst_ns) / 1e6);
         sum_ns = 0;
@@ -494,7 +494,7 @@ void KeyEventCallback(bool handled, void* user_data) {
   if (handled) {
     LOG_DEBUG("Tastenereignis: handled=1");
   } else {
-    LOG_INFO("Taste nicht zugestellt (handled=0) - Fokus?");
+    LOG_DEBUG("Taste nicht zugestellt (handled=0) - Fokus?");
   }
 }
 

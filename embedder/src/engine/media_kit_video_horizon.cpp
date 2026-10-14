@@ -719,7 +719,7 @@ extern "C" bool flutter_libnx_media_kit_texture_frame(
       const uint64_t flags = mpv_render_context_update(output->render_context);
       output->callback_count++;
       if (output->callback_count <= 5) {
-        LOG_INFO("media_kit_video: Callback %u, update-flags=0x%llx",
+        LOG_DEBUG("media_kit_video: Callback %u, update-flags=0x%llx",
                  output->callback_count,
                  static_cast<unsigned long long>(flags));
       }
@@ -746,7 +746,7 @@ extern "C" bool flutter_libnx_media_kit_texture_frame(
         } else {
           output->render_count++;
           if (output->render_count <= 3 || output->render_count % 120 == 0) {
-            LOG_INFO("media_kit_video: render #%u (%dx%d) ok",
+            LOG_DEBUG("media_kit_video: render #%u (%dx%d) ok",
                      output->render_count, output->width, output->height);
           }
 
@@ -762,14 +762,18 @@ extern "C" bool flutter_libnx_media_kit_texture_frame(
           g_gl.Clear(0x00004000 /* GL_COLOR_BUFFER_BIT */);
           g_gl.ColorMask(1, 1, 1, 1);
 
-          // DIAGNOSE: Was steht wirklich in der Textur? Ein Pixel aus der
-          // Bildmitte, beim ersten und jedem 120. Frame. Beantwortet
-          // Schwarz-vs-Alpha-vs-Sharing in einer Zeile.
-          if (output->render_count == 1 || output->render_count % 120 == 0) {
+          // ДИАГНОСТИКА: что реально лежит в текстуре? Один пиксель из
+          // центра кадра — на первом и каждом 120-м фрейме. Отвечает на
+          // вопрос «чёрное vs альфа vs шеринг» одной строкой. Только при
+          // включённом Debug-логе: ReadPixels вынуждает точку синхронизации
+          // GPU-пайплайна (слышно как микрорывок примерно раз в 2 с) — в
+          // нормальном режиме диагностика вообще не должна выполняться.
+          if ((output->render_count == 1 || output->render_count % 120 == 0) &&
+              LogEnabled(LogLevel::kDebug)) {
             uint8_t px[4] = {0, 0, 0, 0};
             g_gl.ReadPixels(output->width / 2, output->height / 2, 1, 1,
                             GL_RGBA, GL_UNSIGNED_BYTE, px);
-            LOG_INFO("media_kit_video: Pixel Mitte R=%u G=%u B=%u A=%u",
+            LOG_DEBUG("media_kit_video: Pixel Mitte R=%u G=%u B=%u A=%u",
                      px[0], px[1], px[2], px[3]);
           }
           g_gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
