@@ -23,6 +23,14 @@ examples/**/build/
 build-logs/
 examples/*/generated/
 examples/*/romfs/
+# Gerüst, das flutter build bundle selbst anlegt, sobald es in einem
+# Flutter-Projekt eine Datei vermisst (beobachtet am Beispiel-Paket
+# examples/ui_app/dart). Nicht Teil des Beispiels, daher nicht versionieren.
+.metadata
+.idea/
+*.iml
+analysis_options.yaml
+examples/*/dart/web/
 # Автогенерируемая NRO-иконка (build-dart-app.sh из логотипа/mipmap проекта)
 examples/*/icon.jpg
 

@@ -685,9 +685,13 @@ extern const uint8_t kDartIsolateSnapshotInstructions[]
 //
 // Vorgabewerte: Der Dienst laeuft an, sobald `--disable-vm-service` fehlt
 // (shell/common/switches.cc:240). Der Host steht sonst auf 127.0.0.1 und waere
-// vom Mac aus nicht erreichbar, deshalb 0.0.0.0. Der Port 0 heisst "beliebig";
-// dann waehlt die VM selbst - der echte Port steht dann im Log. Das Auth-Code-
-// Abschalten ist reine Entwicklungskosmetik und gehoert in keinen Release.
+// vom Mac aus nicht erreichbar, deshalb 0.0.0.0.
+//
+// Der Port ist fest 8181 und nicht 0 ("beliebig"): bei 0 vergibt die VM einen
+// zufaelligen Port und schreibt ihn nur ins Log - weder ein Client auf dem Mac
+// noch `flutter attach` koennten ihn dann finden. Das Auth-Code-Abschalten ist
+// reine Entwicklungskosmetik und gehoert in keinen Release; der Dienst selbst
+// laeuft ohnehin nur im Debug-Build.
 #ifdef FLUTTER_LIBNX_DEBUG
 static const char* kVmServiceArgs[] = {
     // Der ERSTE Eintrag ist fuer die Engine der Programmname, kein Schalter
@@ -696,7 +700,7 @@ static const char* kVmServiceArgs[] = {
     "flutter_libnx",
     "--enable-vm-service",
     "--vm-service-host=0.0.0.0",
-    "--vm-service-port=0",
+    "--vm-service-port=8181",
     "--disable-service-auth-codes",
 };
 #endif  // FLUTTER_LIBNX_DEBUG

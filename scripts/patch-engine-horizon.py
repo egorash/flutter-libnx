@@ -1130,6 +1130,55 @@ def patch_dart_version_string(src: str) -> None:
     )
 
 
+def patch_dart_cpu_arm64(src: str) -> None:
+    """CPU::FlushICache fuer Horizon.
+
+    Diese Funktion braucht es erst mit dem JIT-Build: nur die JIT-VM erzeugt
+    zur Laufzeit Code, der unmittelbar danach ausgefuehrt wird. Im AOT-Build
+    (flutter_runtime_mode=release) wird die Datei gar nicht uebersetzt - dort
+    steht sie darum bis heute unangetastet, und ohne Horizon-Zweig bricht der
+    Debug-Build mit
+
+        cpu_arm64.cc:60: #error FlushICache not implemented for this OS
+
+    ab.
+
+    Die Wartung des Instruction-Cache macht hier armICacheInvalidate aus
+    <switch/arm/cache.h> (libnx). Sie entspricht genau dem, was die anderen
+    Ports tun - macOS ruft sys_icache_invalidate, Linux __builtin___clear_cache.
+    Der Syscall svcFlushDataCache waere hier falsch: er betrifft den
+    Data-Cache, und die Anmerkung in svc.h richtet ausdruecklich davon ab.
+    """
+    path = os.path.join(src, "flutter", "third_party", "dart", "runtime", "vm",
+                        "cpu_arm64.cc")
+
+    replace_once(
+        path,
+        "#elif defined(DART_HOST_OS_MACOS) || defined(DART_HOST_OS_IOS)\n"
+        "#include <libkern/OSCacheControl.h>\n",
+        "#elif defined(DART_HOST_OS_MACOS) || defined(DART_HOST_OS_IOS)\n"
+        "#include <libkern/OSCacheControl.h>\n"
+        "#elif defined(DART_HOST_OS_HORIZON)\n"
+        "#include <switch/arm/cache.h>\n",
+        "cpu_arm64.cc (Include)",
+    )
+
+    replace_once(
+        path,
+        "#elif defined(DART_HOST_OS_WINDOWS)\n"
+        "  BOOL result = FlushInstructionCache(\n"
+        "      GetCurrentProcess(), reinterpret_cast<const void*>(start), size);\n"
+        "  ASSERT(result != 0);\n",
+        "#elif defined(DART_HOST_OS_HORIZON)\n"
+        "  armICacheInvalidate(reinterpret_cast<void*>(start), size);\n"
+        "#elif defined(DART_HOST_OS_WINDOWS)\n"
+        "  BOOL result = FlushInstructionCache(\n"
+        "      GetCurrentProcess(), reinterpret_cast<const void*>(start), size);\n"
+        "  ASSERT(result != 0);\n",
+        "cpu_arm64.cc (FlushICache)",
+    )
+
+
 def patch_dart_vm_sources(src: str, repo: str) -> None:
     """Legt die Horizon-Implementierungen ab und traegt sie in die Quellenliste ein.
 
@@ -3817,6 +3866,9 @@ def main() -> int:
     print("==> Dart-VM: Horizon-Implementierungen")
     patch_dart_vm_sources(SRC, repo_root)
     patch_dart_vm_libs(SRC)
+    # Nur der JIT-Build braucht das; der AOT-Build uebersetzt cpu_arm64.cc
+    # gar nicht. Ohne den Zweig bricht `--mode debug` mit #error ab.
+    patch_dart_cpu_arm64(SRC)
 
     print("==> dart:io – Wächter für POSIX-gleiche Dateien")
     patch_dart_bin_guards(SRC)
