@@ -466,14 +466,29 @@ INCLUDE_SCAN_ROOTS = (
     "flutter/third_party/dart/runtime/vm",
     "flutter/third_party/dart/runtime/bin",
     "flutter/third_party/dart/runtime/platform",
+    # ICU hat dieselbe Luecke, faellt aber erst im Debug-Build auf: LLONG_MAX
+    # steht nur in U_ASSERT, und U_ASSERT ist im Releasebuild ein Nichts.
+    # Beispiel: third_party/icu/source/i18n/measunit_extra.cpp:1294.
+    "flutter/third_party/icu/source/common",
+    "flutter/third_party/icu/source/i18n",
 )
 
 INCLUDE_CHECKS = (
     ("cstring", ("string.h", "cstring"),
      re.compile(r"\b(memcpy|memset|memmove|memcmp|strlen|strcmp|strncmp|strdup)\s*\(")),
+    # <limits.h> genuegt fuer die gewoehnlichen Grenzwerte. Fuer LLONG_* ist es
+    # unter newlib aber NICHT ausreichend - nachgemessen:
+    #   aarch64-none-elf-g++ mit "#include <limits.h>" und "LLONG_MAX"
+    #   -> "'LLONG_MAX' was not declared in this scope", Compiler nennt <climits>.
+    # Deshalb zwei Regeln statt einer: die LLONG-Familie verlangt zwingend
+    # <climits>, sonst wuerde jede Datei mit vorhandenem <limits.h> als
+    # erledigt gelten - und genau daran ist ICU im Debug-Build gescheitert
+    # (source/i18n/measunit_extra.cpp:1294, LLONG_MAX nur in U_ASSERT).
     ("climits", ("limits.h", "climits"),
      re.compile(r"\b(INT_MAX|INT_MIN|UINT_MAX|LONG_MAX|LONG_MIN|ULONG_MAX|"
-                r"LLONG_MAX|LLONG_MIN|ULLONG_MAX|SHRT_MAX|SHRT_MIN|CHAR_BIT)\b")),
+                r"SHRT_MAX|SHRT_MIN|CHAR_BIT)\b")),
+    ("climits", ("climits",),
+     re.compile(r"\b(LLONG_MAX|LLONG_MIN|ULLONG_MAX)\b")),
 )
 
 
