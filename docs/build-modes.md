@@ -109,8 +109,30 @@ flutter attach --debug-url http://<ip-консоли>:8181
 | Проверка | Статус |
 |---|---|
 | Сборка release-цепочки после изменений | ✅ скрипты и линковка (2026-10-14) |
-| `gn gen --mode debug`, сборка debug-движка | ✅ (2026-10-14) |
+| `gn gen --mode debug`, сборка debug-движка | ✅ `libflutter_engine.a` 1.9 ГБ (2026-10-15) |
+| Линковка debug-`.nro` | ❌ не хватает четырёх портов, см. §6 |
 | Debug-`.nro` запускается на консоли | ⏳ не проверено |
 | VM-сервис виден с Mac | ⏳ не проверено |
 | Dart-логи (GetX) видны в зеркале | ⏳ не проверено |
 | hot reload (`flutter attach` → `r`) | ⏳ не проверено |
+
+## 6. Что осталось до рабочей debug-`.nro`
+
+Движок собирается целиком, и линковка доходит до единственного реального
+барьера: четырёх символов, которые JIT-путь использует, а порт Horizon их
+ещё не реализует. Список получен из линкера, не придуман:
+
+| Символ | Где нужен | Сложность |
+|---|---|---|
+| `basename` | `dart/runtime/platform/utils.cc:456` — `Utils::Basename` | лёгко: newlib не поставляет `basename` вообще (в `libc.a` его нет). Либо Horizon-ветка «не обрабатывается», как у Fuchsia/Windows, либо своя реализация через последний `/` |
+| `dart::NativeSymbolResolver::AddSymbols` | `vm/dart_api_impl.cc:1606` — разбор символов JIT-ядра | лёгко: наш `native_symbol_horizon.cc` реализует не весь интерфейс |
+| `dart::bin::VirtualMemory::{Allocate,Protect,CalculatePageSize,page_size_,~VirtualMemory}` | `bin/elf_loader.cc`, `bin/mappable.h` | средне: `bin/virtual_memory_posix.cc` целиком под `#if` для Linux/Android, для Horizon файл пуст. Нужна реализация через `svcMapMemory`/`svcSetMemoryPermission` |
+| `dart::ThreadInterrupter::{InstallSignalHandler,InterruptThread,RemoveSignalHandler}` | `vm/thread_interrupter.cc` | **сложно**: safepoints в JIT требуют прерывания потоков, а реализации существуют только для Windows/Android/Linux/Fuchsia. Horizon не имеет перенесённых сигналов, поэтому нужен не порт, а решение — опрос вместо прерывания либо безопасные точки на границах |
+
+Первые три закрываются по образцу уже сделанных портов
+(`os_horizon.cc`, `virtual_memory_horizon.cc`). Четвёртый — самостоятельная
+задача: без него JIT может собрать код, но не сможет вовремя остановиться
+для GC и обслуживания протокола.
+
+**Почему это не «просто дописать»:** все четыре ошибки живут только в JIT-пути.
+Release-сборка их не касается — она собирается и работает.

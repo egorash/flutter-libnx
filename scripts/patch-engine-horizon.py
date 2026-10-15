@@ -1174,7 +1174,14 @@ def patch_dart_cpu_arm64(src: str) -> None:
         "#elif defined(DART_HOST_OS_MACOS) || defined(DART_HOST_OS_IOS)\n"
         "#include <libkern/OSCacheControl.h>\n"
         "#elif defined(DART_HOST_OS_HORIZON)\n"
-        "#include <switch/arm/cache.h>\n",
+        "// switch/arm/cache.h traegt kein extern \"C\" - anders als switch.h, das\n"
+        "// seine ganze Familie umschliesst. Ohne die Klammer entsteht aus C++\n"
+        "// eine gemanglte Referenz, waehrend libnx.a das Symbol mit C-Sprache\n"
+        "// definiert (nm zeigt unvermangelt 'T armICacheInvalidate'); der Link\n"
+        "// endet dann mit undefined reference.\n"
+        "extern \"C\" {\n"
+        "#include <switch/arm/cache.h>\n"
+        "}\n",
         "cpu_arm64.cc (Include)",
     )
 

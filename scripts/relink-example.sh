@@ -14,6 +14,26 @@ D="$REPO/examples/$EX"
 LOG="$REPO/build-logs/link-$EX.log"
 mkdir -p "$(dirname "$LOG")"
 
+# Moduswechsel kostet ein leeres build/.
+#
+# make kennt kein Abochen auf Compile-Flags: nach einem Wechsel zwischen
+# release und debug liegen die .o-Dateien des anderen Modus noch da. Sie sind
+# nicht falsch im Sinne von kaputt - sie sind falsch im Sinne von alt, und der
+# Linker sucht dann die Symbole des falschen Zweigs. Genau das ergab
+# undefined reference auf _kDartVmSnapshotData: main.o war im Release-Modus
+# uebersetzt, das RomFS trug den JIT-Kern.
+#
+# Der Stamp ist ein Einzeiler in build/ und wird nur gelesen, wenn es ihn
+# schon gibt - ein frisches Beispiel verliert nichts.
+MODE="${MODE:-release}"
+stamp="$D/build/.mode"
+if [ -f "$stamp" ] && [ "$(cat "$stamp")" != "$MODE" ]; then
+  echo "Moduswechsel $(cat "$stamp") -> $MODE: build/ wird geleert"
+  rm -rf "$D/build"
+fi
+mkdir -p "$D/build"
+printf '%s' "$MODE" > "$stamp"
+
 rm -f "$D/$EX.elf"
 # set -e: Ein Fehlschlag des Builds ist hier ein erwarteter Fall (RC wird unten
 # ausgewertet), deshalb if/else statt nacktem Aufruf.
