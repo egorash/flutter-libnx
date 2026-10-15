@@ -19,14 +19,15 @@ SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 GN="$SRC/flutter/third_party/gn/gn"
 
 MODE="release"
+mode_explicit=0
 usage() {
   echo "Verwendung: $0 [--mode release|debug]" >&2
   exit 1
 }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --mode)   MODE="${2:?--mode braucht einen Wert}"; shift 2 ;;
-    --mode=*) MODE="${1#*=}"; shift ;;
+    --mode)   MODE="${2:?--mode braucht einen Wert}"; mode_explicit=1; shift 2 ;;
+    --mode=*) MODE="${1#*=}"; mode_explicit=1; shift ;;
     -h|--help) usage ;;
     *) echo "Unbekanntes Argument: $1" >&2; usage ;;
   esac
@@ -65,10 +66,11 @@ case "$MODE" in
   *) die "Unbekannter Modus: $MODE (erlaubt: release, debug)" ;;
 esac
 
-# env.sh setzt OUT auf das Release-Verzeichnis. Ohne diese Pruefung schreibt
-# `gn-gen-horizon.sh --mode debug` genau dorthin - und macht den Release-Build
-# kaputt, weil gn args.gn VOR der Auswertung schreibt. Deshalb: ein gesetztes
-# OUT muss zum Modus passen, sonst Abbruch mit Klartext.
+# env.sh setzt OUT fest auf das Release-Verzeichnis. Ein ausdruecklich
+# gewaehlter --mode hat Vorrang und ueberschreibt OUT - mit deutlicher Warnung.
+# Ohne diese Logik schreibt `gn-gen-horizon.sh --mode debug` dorthin, wo der
+# Release-Build liegt, und macht ihn kaputt: gn schreibt args.gn VOR der
+# Auswertung, ein Fehler hinterlaesst also die Debug-Argumente liegen.
 #
 # Vergleich ueber absolute Pfade: env.sh setzt OUT absolut, der Default hier ist
 # relativ - ein Zeilenvergleich wuerde denselben Katalog als fremd melden.
@@ -76,7 +78,11 @@ if [ -n "${OUT:-}" ]; then
   case "$OUT" in /*) out_gegeben="$OUT" ;; *) out_gegeben="$SRC/$OUT" ;; esac
   case "$default_out" in /*) out_erwartet="$default_out" ;; *) out_erwartet="$SRC/$default_out" ;; esac
   if [ "$out_gegeben" != "$out_erwartet" ]; then
-    die "OUT=$OUT (aus der Umgebung) passt nicht zu --mode $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+    if [ "$mode_explicit" -eq 1 ]; then
+      echo "HINWEIS: OUT=$OUT wird wegen --mode $MODE ignoriert; benutzt wird $default_out" >&2
+    else
+      die "OUT=$OUT (aus der Umgebung) passt nicht zum Default-Modus $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+    fi
   fi
 fi
 OUT="$default_out"

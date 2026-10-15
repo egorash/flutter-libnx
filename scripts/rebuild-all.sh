@@ -25,6 +25,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 SRC="${SRC:-$HOME/engine/flutter/engine/src}"
 MODE="release"
+mode_explicit=0
 usage() {
   echo "Verwendung: $0 [--mode release|debug] BEISPIEL" >&2
   echo "  release (Vorgabe): gen_snapshot -> Engine -> app_aot.s -> .nro" >&2
@@ -33,8 +34,8 @@ usage() {
 }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --mode)   MODE="${2:?--mode braucht einen Wert}"; shift 2 ;;
-    --mode=*) MODE="${1#*=}"; shift ;;
+    --mode)   MODE="${2:?--mode braucht einen Wert}"; mode_explicit=1; shift 2 ;;
+    --mode=*) MODE="${1#*=}"; mode_explicit=1; shift ;;
     -h|--help) usage ;;
     --*) echo "Unbekanntes Argument: $1" >&2; usage ;;
     *) break ;;
@@ -43,12 +44,16 @@ done
 EXAMPLE="${1:-ui_app}"
 
 # Je Modus ein Ausgabeverzeichnis - es muss zum Engine-Build passen, weil
-# Schritt 2 genau dort libflutter_engine.a erzeugt. Ein von aussen gesetztes OUT
-# (env.sh) darf den Modus nicht stillschweigend ueberschreiben.
+# Schritt 2 genau dort libflutter_engine.a erzeugt.
+#
+# env.sh exportiert OUT fest auf das Release-Verzeichnis. Ein ausdruecklich
+# gewaehlter --mode hat deshalb Vorrang und ueberschreibt OUT - mit einer
+# deutlichen Warnung, damit der stillschweigende Wechsel nicht passiert. Ohne
+# --mode bleibt OUT die Vorgabe (dann ist es der dokumentierte Weg zu einem
+# eigenen Engine-Build).
 #
 # Der Vergleich laeuft ueber absolute Pfade: env.sh setzt OUT absolut
-# ($SRC/out/...), der Default hier ist relativ. Ein reiner Zeilenvergleich
-# wuerde denselben Katalog als "verschieden" melden.
+# ($SRC/out/...), der Default hier ist relativ.
 abs_out() {
   case "$1" in
     /*) printf '%s' "$1" ;;
@@ -61,7 +66,14 @@ case "$MODE" in
   *) die "Unbekannter Modus: $MODE (erlaubt: release, debug)" ;;
 esac
 if [ -n "${OUT:-}" ] && [ "$(abs_out "$OUT")" != "$(abs_out "$default_out")" ]; then
-  die "OUT=$OUT (aus der Umgebung) passt nicht zu --mode $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+  if [ "$mode_explicit" -eq 1 ]; then
+    echo "HINWEIS: OUT=$OUT wird wegen --mode $MODE ignoriert; benutzt wird $default_out" >&2
+  else
+    die "OUT=$OUT (aus der Umgebung) passt nicht zum Default-Modus $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+  fi
+fi
+if [ "$mode_explicit" -eq 1 ] || [ -z "${OUT:-}" ]; then
+  OUT="$default_out"
 fi
 # exportiert, damit build-horizon.sh und relink-example.sh dasselbe Verzeichnis
 # sehen - ohne das nutzen die Kindprozesse ihren eigenen Vorgabewert.
