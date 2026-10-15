@@ -45,12 +45,22 @@ EXAMPLE="${1:-ui_app}"
 # Je Modus ein Ausgabeverzeichnis - es muss zum Engine-Build passen, weil
 # Schritt 2 genau dort libflutter_engine.a erzeugt. Ein von aussen gesetztes OUT
 # (env.sh) darf den Modus nicht stillschweigend ueberschreiben.
+#
+# Der Vergleich laeuft ueber absolute Pfade: env.sh setzt OUT absolut
+# ($SRC/out/...), der Default hier ist relativ. Ein reiner Zeilenvergleich
+# wuerde denselben Katalog als "verschieden" melden.
+abs_out() {
+  case "$1" in
+    /*) printf '%s' "$1" ;;
+    *)  printf '%s' "$SRC/$1" ;;
+  esac
+}
 case "$MODE" in
   release) default_out="out/horizon_release_arm64" ;;
   debug)   default_out="out/horizon_debug_arm64" ;;
   *) die "Unbekannter Modus: $MODE (erlaubt: release, debug)" ;;
 esac
-if [ -n "${OUT:-}" ] && [ "$OUT" != "$default_out" ]; then
+if [ -n "${OUT:-}" ] && [ "$(abs_out "$OUT")" != "$(abs_out "$default_out")" ]; then
   die "OUT=$OUT (aus der Umgebung) passt nicht zu --mode $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
 fi
 # exportiert, damit build-horizon.sh und relink-example.sh dasselbe Verzeichnis

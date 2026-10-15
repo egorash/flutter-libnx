@@ -69,8 +69,15 @@ esac
 # `gn-gen-horizon.sh --mode debug` genau dorthin - und macht den Release-Build
 # kaputt, weil gn args.gn VOR der Auswertung schreibt. Deshalb: ein gesetztes
 # OUT muss zum Modus passen, sonst Abbruch mit Klartext.
-if [ -n "${OUT:-}" ] && [ "$OUT" != "$default_out" ]; then
-  die "OUT=$OUT (aus der Umgebung) passt nicht zu --mode $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+#
+# Vergleich ueber absolute Pfade: env.sh setzt OUT absolut, der Default hier ist
+# relativ - ein Zeilenvergleich wuerde denselben Katalog als fremd melden.
+if [ -n "${OUT:-}" ]; then
+  case "$OUT" in /*) out_gegeben="$OUT" ;; *) out_gegeben="$SRC/$OUT" ;; esac
+  case "$default_out" in /*) out_erwartet="$default_out" ;; *) out_erwartet="$SRC/$default_out" ;; esac
+  if [ "$out_gegeben" != "$out_erwartet" ]; then
+    die "OUT=$OUT (aus der Umgebung) passt nicht zu --mode $MODE; erwartet wird $default_out. Entweder OUT leer lassen oder 'unset OUT'."
+  fi
 fi
 OUT="$default_out"
 
