@@ -78,6 +78,11 @@ fi
 # exportiert, damit build-horizon.sh und relink-example.sh dasselbe Verzeichnis
 # sehen - ohne das nutzen die Kindprozesse ihren eigenen Vorgabewert.
 export OUT="$default_out"
+# MODE muss in die Kindprozesse: build-example-wsl.sh leitet daraus ENGINE_OUT
+# ab, und das Makefile setzt FLUTTER_LIBNX_DEBUG. Ohne Export baut make im
+# Default release gegen ein JIT-RomFS und sucht die AOT-Symbole, die es dort
+# nicht gibt - undefined reference auf _kDartVmSnapshotData.
+export MODE
 OS=$(uname -s)
 
 # OUT darf absolut (env.sh) oder relativ zu SRC sein.
