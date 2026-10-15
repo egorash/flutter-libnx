@@ -1179,6 +1179,38 @@ def patch_dart_cpu_arm64(src: str) -> None:
     )
 
 
+def patch_dart_profiler(src: str) -> None:
+    """ReleaseToCurrentBlock braucht eine Aussage ueber die Probenahme.
+
+    Der Dart-Profiler gehoert nur in den JIT-Build, deshalb fällt die Datei
+    erst mit `--mode debug` an. Sie stellt zwei Wege nebeneinander:
+
+      * macOS/Windows/Fuchsia - die Probe stammt von einem fremden Thread,
+        darum wird der Block ueber einen atomaren Tausch freigegeben
+        (besser für TSAN);
+      * Linux/Android - die Probe kommt aus einem Signalhandler im selben
+        Thread, der Tausch entfällt.
+
+    Horizon hat keinen Signalhandler und, solange es kein Profiler-Anzeiger
+    gibt, auch keinen fremden Thread: es wird hier gar nicht gesampelt. Der
+    Zweig ist also toter Code und entscheidet nur, welcher Speicherzaun
+    guenstiger waere, falls doch einmal gesampelt wird. Gewaehlt ist die
+    Gruppe mit dem Tausch - sie ist die strengere und damit die sichere
+    (Fuchsia ist das Vorbild: auch dort gibt es keine Signale fuer Proben).
+    """
+    path = os.path.join(src, "flutter", "third_party", "dart", "runtime", "vm",
+                        "profiler.cc")
+
+    replace_once(
+        path,
+        "#if defined(DART_HOST_OS_MACOS) || defined(DART_HOST_OS_WINDOWS) ||            \\\n"
+        "    defined(DART_HOST_OS_FUCHSIA)\n",
+        "#if defined(DART_HOST_OS_MACOS) || defined(DART_HOST_OS_WINDOWS) ||            \\\n"
+        "    defined(DART_HOST_OS_FUCHSIA) || defined(DART_HOST_OS_HORIZON)\n",
+        "profiler.cc (ReleaseToCurrentBlock)",
+    )
+
+
 def patch_dart_vm_sources(src: str, repo: str) -> None:
     """Legt die Horizon-Implementierungen ab und traegt sie in die Quellenliste ein.
 
@@ -3869,6 +3901,7 @@ def main() -> int:
     # Nur der JIT-Build braucht das; der AOT-Build uebersetzt cpu_arm64.cc
     # gar nicht. Ohne den Zweig bricht `--mode debug` mit #error ab.
     patch_dart_cpu_arm64(SRC)
+    patch_dart_profiler(SRC)
 
     print("==> dart:io – Wächter für POSIX-gleiche Dateien")
     patch_dart_bin_guards(SRC)
