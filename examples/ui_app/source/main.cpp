@@ -81,6 +81,13 @@ extern "C" void flutter_libnx_media_kit_video_pump(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 extern "C" void flutter_libnx_media_kit_video_shutdown(void);
 
+// Audiokanal des Plugins audioplayers (audio_horizon.cpp und
+// audioplayers_horizon.cpp). init vor dem Engine-Start, pump aus der
+// Hauptschleife.
+extern "C" bool flutter_libnx_audio_init(std::string* error);
+extern "C" void flutter_libnx_audioplayers_pump(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
 namespace {
 
 constexpr const char* kHostIp = "192.168.0.153";
@@ -988,6 +995,18 @@ int main(int argc, char* argv[]) {
 
   FLUTTER_API_SYMBOL(FlutterEngine) engine = nullptr;
   flutter_libnx_scan_heap("vor EngineInitialize");
+
+  // Audio vor der Engine: der Audiokanal kann von Dart schon während des
+  // ersten Frames bespielt werden, und audren braucht ohnehin einen freien
+  // Speicherbereich ausserhalb des Heaps. Scheitert er, laeuft die App weiter
+  // - dann eben stumm.
+  {
+    std::string audio_error;
+    if (!flutter_libnx_audio_init(&audio_error)) {
+      LOG_WARN("Audio nicht verfuegbar: %s", audio_error.c_str());
+    }
+  }
+
   LOG_INFO("FlutterEngineInitialize ...");
   FlutterEngineResult result = FlutterEngineInitialize(
       FLUTTER_ENGINE_VERSION, &renderer, &project, nullptr, &engine);
@@ -1114,6 +1133,12 @@ int main(int argc, char* argv[]) {
     // geschehen (MarkExternalTextureFrameAvailable verlangt den
     // Plattform-Thread); der mpv-Render-Thread setzt nur ein Flag.
     flutter_libnx_media_kit_video_pump(engine);
+
+    // Fertige Audioereignisse an Dart melden. Der Audio-Thread sammelt sie
+    // nur - senden darf man sie von hier, denn der EventChannel des Plugins
+    // verlangt den Plattform-Thread. Ohne das wartet Dart 30 Sekunden auf
+    // sein "audio.onPrepared".
+    flutter_libnx_audioplayers_pump(engine);
 
     if (!focus_sent && g_first_frame_presented && engine != nullptr) {
       FlutterViewFocusEvent focus = {};

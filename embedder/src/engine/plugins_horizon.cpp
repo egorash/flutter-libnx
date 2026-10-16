@@ -39,6 +39,22 @@
 #include "flutter_libnx/log.h"
 #include "flutter_libnx/standard_message_codec.h"
 
+// Kanaele mit dynamischem Suffix (audioplakers haengt die playerId an) werden
+// nicht ueber die Tabelle, sondern ueber eigene Pruefer bedient.
+extern "C" bool flutter_libnx_audioplayers_stream_handle(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessage* message,
+    const std::string& channel_name);
+
+extern "C" bool flutter_libnx_audioplayers_handle(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessage* message,
+    const std::string& method,
+    const flutter_libnx::StdValue& args);
+
+extern "C" void flutter_libnx_audioplayers_pump(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
 namespace flutter_libnx {
 
 namespace {
@@ -866,6 +882,7 @@ ChannelRegistry MakeRegistry() {
   r.method["plugins.flutter.io/url_launcher"] = HandleUrlLauncher;
   r.method["flutter.baseflow.com/geolocator"] = HandleGeolocator;
   r.method["plugins.flutter.io/image_picker"] = HandleImagePicker;
+  r.method["xyz.luan/audioplayers"] = flutter_libnx_audioplayers_handle;
   return r;
 }
 
@@ -903,6 +920,12 @@ extern "C" bool flutter_libnx_handle_plugin_message(
 
   const auto method = reg.method.find(channel);
   if (method == reg.method.end()) {
+    // Kanalnamen mit Suffix je Spielern lassen sich nicht exakt treffen -
+    // audioplyers haengt die playerId (UUID) an den Stream-Namen an. Solche
+    // Kanaele melden sich selbst, bevor der Rest als unbekannt gilt.
+    if (flutter_libnx_audioplayers_stream_handle(engine, message, channel)) {
+      return true;
+    }
     LogUnknownChannelOnce(channel);
     return false;
   }
