@@ -466,9 +466,9 @@ INCLUDE_SCAN_ROOTS = (
     "flutter/third_party/dart/runtime/vm",
     "flutter/third_party/dart/runtime/bin",
     "flutter/third_party/dart/runtime/platform",
-    # ICU hat dieselbe Luecke, faellt aber erst im Debug-Build auf: LLONG_MAX
-    # steht nur in U_ASSERT, und U_ASSERT ist im Releasebuild ein Nichts.
-    # Beispiel: third_party/icu/source/i18n/measunit_extra.cpp:1294.
+    # ICU имеет ту же дыру, но всплывает она только в debug-сборке: LLONG_MAX
+    # стоит лишь в U_ASSERT, а U_ASSERT в release-сборке - пустое место.
+    # Пример: third_party/icu/source/i18n/measunit_extra.cpp:1294.
     "flutter/third_party/icu/source/common",
     "flutter/third_party/icu/source/i18n",
 )
@@ -476,14 +476,14 @@ INCLUDE_SCAN_ROOTS = (
 INCLUDE_CHECKS = (
     ("cstring", ("string.h", "cstring"),
      re.compile(r"\b(memcpy|memset|memmove|memcmp|strlen|strcmp|strncmp|strdup)\s*\(")),
-    # <limits.h> genuegt fuer die gewoehnlichen Grenzwerte. Fuer LLONG_* ist es
-    # unter newlib aber NICHT ausreichend - nachgemessen:
-    #   aarch64-none-elf-g++ mit "#include <limits.h>" und "LLONG_MAX"
-    #   -> "'LLONG_MAX' was not declared in this scope", Compiler nennt <climits>.
-    # Deshalb zwei Regeln statt einer: die LLONG-Familie verlangt zwingend
-    # <climits>, sonst wuerde jede Datei mit vorhandenem <limits.h> als
-    # erledigt gelten - und genau daran ist ICU im Debug-Build gescheitert
-    # (source/i18n/measunit_extra.cpp:1294, LLONG_MAX nur in U_ASSERT).
+    # <limits.h> хватает для обычных предельных значений. Для LLONG_* под
+    # newlib его НЕ достаточно - проверено: aarch64-none-elf-g++ с
+    # "#include <limits.h>" и "LLONG_MAX" ругается
+    # "'LLONG_MAX' was not declared in this scope" и называет <climits>.
+    # Поэтому правил два, а не одно: семейство LLONG требует именно
+    # <climits>, иначе любая файл с уже имеющимся <limits.h> считалась бы
+    # готовой - а на этом ровно споткнулся ICU в debug-сборке
+    # (source/i18n/measunit_extra.cpp:1294, LLONG_MAX только в U_ASSERT).
     ("climits", ("limits.h", "climits"),
      re.compile(r"\b(INT_MAX|INT_MIN|UINT_MAX|LONG_MAX|LONG_MIN|ULONG_MAX|"
                 r"SHRT_MAX|SHRT_MIN|CHAR_BIT)\b")),
@@ -1146,23 +1146,20 @@ def patch_dart_version_string(src: str) -> None:
 
 
 def patch_dart_cpu_arm64(src: str) -> None:
-    """CPU::FlushICache fuer Horizon.
+    """CPU::FlushICache для Horizon.
 
-    Diese Funktion braucht es erst mit dem JIT-Build: nur die JIT-VM erzeugt
-    zur Laufzeit Code, der unmittelbar danach ausgefuehrt wird. Im AOT-Build
-    (flutter_runtime_mode=release) wird die Datei gar nicht uebersetzt - dort
-    steht sie darum bis heute unangetastet, und ohne Horizon-Zweig bricht der
-    Debug-Build mit
+    Функция нужна только JIT-сборке: лишь JIT-VM генерирует во время работы
+    код, который тут же исполняется. В AOT-сборке
+    (flutter_runtime_mode=release) файл вообще не переводится - поэтому он до
+    сих пор оставался нетронутым, и без ветки Horizon debug-сборка падала с
 
         cpu_arm64.cc:60: #error FlushICache not implemented for this OS
 
-    ab.
-
-    Die Wartung des Instruction-Cache macht hier armICacheInvalidate aus
-    <switch/arm/cache.h> (libnx). Sie entspricht genau dem, was die anderen
-    Ports tun - macOS ruft sys_icache_invalidate, Linux __builtin___clear_cache.
-    Der Syscall svcFlushDataCache waere hier falsch: er betrifft den
-    Data-Cache, und die Anmerkung in svc.h richtet ausdruecklich davon ab.
+    Обслуживание instruction cache делает armICacheInvalidate из
+    <switch/arm/cache.h> (libnx). Это ровно то же, что делают остальные порты
+    - macOS вызывает sys_icache_invalidate, Linux __builtin___clear_cache.
+    Системный вызов svcFlushDataCache здесь был бы неверным: он касается
+    data cache, и примечание в svc.h прямо от этого отговаривает.
     """
     path = os.path.join(src, "flutter", "third_party", "dart", "runtime", "vm",
                         "cpu_arm64.cc")
@@ -1174,11 +1171,11 @@ def patch_dart_cpu_arm64(src: str) -> None:
         "#elif defined(DART_HOST_OS_MACOS) || defined(DART_HOST_OS_IOS)\n"
         "#include <libkern/OSCacheControl.h>\n"
         "#elif defined(DART_HOST_OS_HORIZON)\n"
-        "// switch/arm/cache.h traegt kein extern \"C\" - anders als switch.h, das\n"
-        "// seine ganze Familie umschliesst. Ohne die Klammer entsteht aus C++\n"
-        "// eine gemanglte Referenz, waehrend libnx.a das Symbol mit C-Sprache\n"
-        "// definiert (nm zeigt unvermangelt 'T armICacheInvalidate'); der Link\n"
-        "// endet dann mit undefined reference.\n"
+        "// switch/arm/cache.h не несёт extern \"C\" - в отличие от switch.h,\n"
+        "// который оборачивает всё своё семейство. Без скобок из C++\n"
+        "// получается mangled-ссылка, тогда как libnx.a определяет символ с\n"
+        "// C-связкой (nm показывает 'T armICacheInvalidate' без искажений), и\n"
+        "// линковка заканчивается undefined reference.\n"
         "extern \"C\" {\n"
         "#include <switch/arm/cache.h>\n"
         "}\n",

@@ -47,14 +47,14 @@ CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 ENGINE_SRC	?=	$(HOME)/engine/flutter/engine/src
 ENGINE_INC	:=	$(ENGINE_SRC)/flutter/shell/platform/embedder
 
-# MODE waehlt Engine-Ausgabe und C++-Variante. scripts/rebuild-all.sh und
-# scripts/build-example-wsl.sh setzen ihn; ohne MODE bleibt alles beim
-# gewohnten Release-Build. FLUTTER_LIBNX_DEBUG schaltet in main.cpp die
-# JIT-Zweige um (kein AOT-Snapshot, VM-Dienst-Schalter) - ohne diese Trennung
-# waere ein Debug-Link an den AOT-Symbolen kaputt.
+# MODE выбирает каталог сборки движка и вариант C++. Его задают
+# scripts/rebuild-all.sh и scripts/build-example-wsl.sh; без MODE всё
+# остаётся на привычном release-билде. FLUTTER_LIBNX_DEBUG включает в
+# main.cpp ветки JIT (без AOT-снапшота, свитчи VM-сервиса) - без такого
+# разделения debug-линковка ломалась бы на AOT-символах.
 #
-# Reihenfolge ist wichtig: ENGINE_LIB ist ein := (sofort ausgewertet) und
-# braucht ENGINE_OUT bereits fertig.
+# Порядок важен: ENGINE_LIB - это := (вычисляется сразу), ему нужен
+# уже готовый ENGINE_OUT.
 MODE	?=	release
 ifeq ($(MODE),debug)
 ENGINE_OUT	?=	$(ENGINE_SRC)/out/horizon_debug_arm64

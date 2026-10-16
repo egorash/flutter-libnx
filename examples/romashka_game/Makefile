@@ -1,14 +1,14 @@
 #---------------------------------------------------------------------------------
-# Abgeleitet vom offiziellen devkitPro-Template
+# Взято из официального шаблона devkitPro
 # (switchbrew/switch-examples: templates/application/Makefile).
-# Aequivalent zu examples/ui_app/Makefile; unterschiedlich sind nur TARGET und
-# APP_TITLE (Name, App-Kennung, Logfile, NACP-Titel).
+# Эквивалентно examples/ui_app/Makefile; различаются только TARGET и
+# APP_TITLE (имя, идентификатор приложения, файл лога, заголовок NACP).
 #
-# Der generische Horizon-Runner (source/main.cpp) wird mit ui_app geteilt:
-# examples/romashka_game/source/main.cpp ist ein Symlink dorthin, damit der rund
-# 1000 Zeilen lange Embedder-Einstieg nicht dupliziert wird. Der Runner ist
-# app-unabhaengig - er startet nur den Dart-Einstiegspunkt "main"; die
-# App-Kennung kommt über -DFLUTTER_LIBNX_APP_ID aus dem Build.
+# Общий Horizon-раннер (source/main.cpp) переиспользуется от ui_app:
+# examples/romashka_game/source/main.cpp - симлинк туда же, чтобы не
+# дублировать примерно тысячу строк точки входа эмбеддера. Раннер не зависит
+# от приложения - он лишь запускает Dart-точку входа "main"; идентификатор
+# приложения приходит из сборки через -DFLUTTER_LIBNX_APP_ID.
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------

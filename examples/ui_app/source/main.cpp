@@ -658,10 +658,9 @@ void PlatformMessageCallback(const FlutterPlatformMessage* message,
 // Mach-O, die es auch bei ELF-Ausgabe beibehält. Die asm-Bindung stellt den
 // Bezug her, ohne dass die Assembly angefasst werden muss.
 //
-// FLUTTER_LIBNX_DEBUG (Makefile, MODE=debug): Es gibt dann kein app_aot.s -
-// der Kernel liegt als kernel_blob.bin im RomFS und wird zur Laufzeit
-// uebersetzt. Die Deklarationen muessen deshalb mit verschwinden, sonst
-// schlaegt der Link fehl (die Symbole existieren nicht).
+// FLUTTER_LIBNX_DEBUG (Makefile, MODE=debug): тогда нет app_aot.s - ядро лежит
+// как kernel_blob.bin в RomFS и переводится во время работы. Объявления должны
+// исчезнуть вместе с ним, иначе линковка падает - символов просто нет.
 #ifndef FLUTTER_LIBNX_DEBUG
 extern "C" {
 extern const uint8_t kDartVmSnapshotData[] asm("_kDartVmSnapshotData");
@@ -673,30 +672,28 @@ extern const uint8_t kDartIsolateSnapshotInstructions[]
 }
 #endif  // FLUTTER_LIBNX_DEBUG
 
-// VM-Dienst-Schalter fuer den Debug-Build. Die Engine liest ihre Kommandozeile
-// aus FlutterProjectArgs.command_line_argc/argv (embedder.cc:2056-2064) und
-// baut daraus die Settings - auch den VM-Dienst.
+// Свитчи VM-сервиса для отладочной сборки. Движок берёт свою командную строку
+// из FlutterProjectArgs.command_line_argc/argv (embedder.cc:2056-2064) и строит
+// из неё Settings - в том числе настройки VM-сервиса.
 //
-// Warum ueberhaupt: Dart-Logs (`developer.log`, GetX) landen im VM nur, wenn
-// sich ein Client auf den Dienststrom "Logging" angemeldet hat
-// (runtime/vm/service.cc, SendLogEvent). Ohne Client geht der Logeintrag
-// verloren - unabhaengig vom Buildmodus. Der Dienst ist die Abhilfe, ohne die
-// VM anzufassen.
+// Зачем это вообще: логи Dart (`developer.log`, GetX) попадают в VM только
+// тогда, когда на служебный поток "Logging" подписан клиент
+// (runtime/vm/service.cc, SendLogEvent). Без клиента запись теряется - и это
+// не зависит от режима сборки. Сервис и есть обходной путь, не трогающий VM.
 //
-// Vorgabewerte: Der Dienst laeuft an, sobald `--disable-vm-service` fehlt
-// (shell/common/switches.cc:240). Der Host steht sonst auf 127.0.0.1 und waere
-// vom Mac aus nicht erreichbar, deshalb 0.0.0.0.
+// Значения по умолчанию: сервис включается, как только отсутствует
+// `--disable-vm-service` (shell/common/switches.cc:240). Хост иначе стоит на
+// 127.0.0.1, с Mac туда не достучаться - поэтому 0.0.0.0.
 //
-// Der Port ist fest 8181 und nicht 0 ("beliebig"): bei 0 vergibt die VM einen
-// zufaelligen Port und schreibt ihn nur ins Log - weder ein Client auf dem Mac
-// noch `flutter attach` koennten ihn dann finden. Das Auth-Code-Abschalten ist
-// reine Entwicklungskosmetik und gehoert in keinen Release; der Dienst selbst
-// laeuft ohnehin nur im Debug-Build.
+// Порт фиксированный 8181, а не 0 ("любой"): при 0 VM выдаёт случайный порт
+// и пишет его только в лог - ни клиент на Mac, ни `flutter attach` его бы не
+// нашли. Отключение auth-кодов - чисто косметика для разработки, в release
+// ему не место; сам сервис и так работает только в debug-сборке.
 #ifdef FLUTTER_LIBNX_DEBUG
 static const char* kVmServiceArgs[] = {
-    // Der ERSTE Eintrag ist fuer die Engine der Programmname, kein Schalter
-    // (embedder.h:2493). Ohne diesen Platzhalter kaeme --enable-vm-service
-    // dort zu liegen und waere wirkungslos - der Dienst bliebe stumm.
+    // ПЕРВЫЙ элемент для движка - это имя программы, а не свитч
+    // (embedder.h:2493). Без этой заглушки --enable-vm-service попал бы
+    // именно туда и не сработал бы - сервис остался бы немым.
     "flutter_libnx",
     "--enable-vm-service",
     "--vm-service-host=0.0.0.0",
@@ -918,18 +915,18 @@ int main(int argc, char* argv[]) {
   project.isolate_snapshot_data = kDartIsolateSnapshotData;
   project.isolate_snapshot_instructions = kDartIsolateSnapshotInstructions;
 #else
-  // Debug (JIT): keine Snapshot-Zeiger. Die Engine erkennt am
-  // nicht-vorkompilierten Zustand der VM selbst, dass sie den Kernel aus dem
-  // RomFS lesen soll - verlangt wird da kernel_blob.bin in den Assets
-  // (embedder.cc:2089-2099). Die uebrigen Snapshot-Felder sind optional
-  // (PopulateJITSnapshotMappingCallbacks, embedder.cc:1768).
+  // Debug (JIT): указателей на снапшоты нет. По тому, что VM не
+  // прекомпилированная, движок сам понимает: ядро надо читать из RomFS - там
+  // требуется kernel_blob.bin в ассетах (embedder.cc:2089-2099). Остальные
+  // поля снапшотов необязательны (PopulateJITSnapshotMappingCallbacks,
+  // embedder.cc:1768).
   //
-  // Dafuer bekommt die Engine ihre Kommandozeile: daraus entstehen die
-  // Settings und damit der VM-Dienst (siehe kVmServiceArgs oben).
+  // Заодно передаём движку командную строку: из неё строятся Settings, а
+  // из них - настройки VM-сервиса (см. kVmServiceArgs выше).
   project.command_line_argc = static_cast<int>(sizeof(kVmServiceArgs) /
                                               sizeof(kVmServiceArgs[0]));
   project.command_line_argv = kVmServiceArgs;
-  LOG_INFO("Modus: debug (JIT), VM-Dienst angefordert auf 0.0.0.0");
+  LOG_INFO("Modus: debug (JIT), VM-сервис запрошен на 0.0.0.0");
 #endif  // FLUTTER_LIBNX_DEBUG
 
   // Ohne dieses Feld bleibt es bei settings.leak_vm = true (common/settings.h

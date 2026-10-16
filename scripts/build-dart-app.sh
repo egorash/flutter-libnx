@@ -185,6 +185,51 @@ for p in "$packages" "$entry"; do
   [ -e "$p" ] || { echo "Nicht gefunden: $p" >&2; exit 1; }
 done
 
+# --- SDK-Kontrolle ----------------------------------------------------------
+# Projekte mit fvm tragen eine .fvm-Verknuepfung auf ein anderes Flutter
+# (hier 3.47.7 gegen unsere 3.41.6). Sobald dort eine fvm-Session lief, zeigt
+# package_config.json auf deren SDK - und dann kompiliert `flutter build
+# bundle` mit dem einen Framework, der Kernel-Schritt mit dem anderen. Der
+# Fehler erscheint dann erst spaet als "Type 'ui.HitTestRequest' is not found"
+# aus dem fremden Framework, ohne jeden Hinweis auf die Ursache (das kostete
+# am 2026-10-16 einen ganzen Bauzyklus).
+#
+# Deshalb einmal nachsehen und Klartext sagen, statt stillzuschweigen.
+python3 - "$packages" "$flutter" "$project" <<'PY' || exit 1
+import json
+import os
+import sys
+from urllib.parse import unquote, urlparse
+
+config_path, flutter_home, project = sys.argv[1], sys.argv[2].rstrip("/"), sys.argv[3]
+
+with open(config_path, encoding="utf-8") as handle:
+    config = json.load(handle)
+
+root = ""
+for package in config.get("packages", []):
+    if package.get("name") == "flutter":
+        root = unquote(urlparse(package.get("rootUri", "")).path)
+        break
+
+if not root:
+    print(f"FEHLER: package 'flutter' fehlt in {config_path}", file=sys.stderr)
+    sys.exit(1)
+
+expected = os.path.join(flutter_home, "packages", "flutter")
+if os.path.realpath(root) != os.path.realpath(expected):
+    print(f"FEHLER: package:flutter zeigt auf {root}", file=sys.stderr)
+    print(f"       erwartet wird das SDK aus FLUTTER_HOME: {expected}",
+          file=sys.stderr)
+    print("       Wahrscheinlich hat eine fvm-Session zuletzt in diesem "
+          "Projekt gearbeitet.", file=sys.stderr)
+    print("       Abhilfe:", file=sys.stderr)
+    print(f"         (cd {project} && "
+          f"{os.path.join(flutter_home, 'bin', 'flutter')} pub get)",
+          file=sys.stderr)
+    sys.exit(1)
+PY
+
 # --- Horizon-Registrant -----------------------------------------------------
 # Wie im Original: erzeugter Einstiegspunkt, der VOR main() die
 # Plattform-Registrierungen ausfuehrt - Method-Channels aus
