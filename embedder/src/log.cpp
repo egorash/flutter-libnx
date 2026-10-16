@@ -1,4 +1,5 @@
 #include "flutter_libnx/log.h"
+#include "flutter_libnx/tick_clock.h"
 
 #include <switch.h>
 
@@ -27,6 +28,8 @@ int g_remote_fd = -1;
 bool g_socket_ready = false;
 bool g_socket_fell_back = false;
 bool g_initialized = false;
+// Nullpunkt fuer die Millisekunden-Marke am Zeilenanfang.
+u64 g_start_tick = 0;
 
 // Der Socket-Dienst darf nur einmal hochgefahren werden, wird aber von zwei
 // Senken gebraucht.
@@ -210,6 +213,7 @@ bool LogInit(const LogConfig& config) {
   }
 
   g_initialized = true;
+  g_start_tick = flutter_libnx::TickNow();
 
   if (any_sink) {
     LogWrite(LogLevel::kInfo, __FILE__, __LINE__,
@@ -272,8 +276,17 @@ void LogWrite(LogLevel level, const char* file, int line, const char* fmt, ...) 
   va_end(args);
 
   char line_buffer[1200];
-  std::snprintf(line_buffer, sizeof(line_buffer), "[flutter-libnx][%s] %s (%s:%d)\n",
-                LevelName(level), message, BaseName(file), line);
+  // Millisekunden seit Start. Ohne diese Marke lässt sich im Protokoll nicht
+  // unterscheiden, ob eine Schleife wirklich lief oder nach wenigen Takten
+  // stehen blieb - genau diese Frage blieb bei Audio und Pad offen.
+  //
+  // armGetSystemTick() liefert Ticks, nicht Nanosekunden: делить на 1000000
+  // здесь нельзя, получается занижение в 52 раза.
+  const u64 elapsed_ms = flutter_libnx::TickMsSince(g_start_tick);
+  std::snprintf(line_buffer, sizeof(line_buffer),
+                "[flutter-libnx][%s][%6llu ms] %s (%s:%d)\n",
+                LevelName(level), static_cast<unsigned long long>(elapsed_ms),
+                message, BaseName(file), line);
 
   // stdout deckt Konsole und nxlink gemeinsam ab, weil nxlinkStdio() stdout umleitet.
   if (g_config.to_stdout || g_nxlink_fd >= 0) {

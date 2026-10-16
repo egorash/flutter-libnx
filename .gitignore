@@ -43,3 +43,9 @@ examples/*/icon.jpg
 out/
 __pycache__/ 
 examples/romashka_game/*
+
+# Laufende Konsolenprotokolle. Sie werden zur Auswertung ins Arbeitsverzeichnis
+# kopiert, sind aber kein Quellstand: romashka_game.log waechst im Lauf auf
+# mehrere tausend Zeilen und wuerde bei jedem Commit die Historie zuschuetten.
+examples/*/*.log
+examples/*/*.log.alt

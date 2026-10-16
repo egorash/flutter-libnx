@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "flutter_libnx/log.h"
+#include "flutter_libnx/tick_clock.h"
 
 #define MINIMP3_IMPLEMENTATION
 // Относительный путь - как у mpv_symbols.inc в static_libraries_horizon.cpp:
@@ -51,12 +52,26 @@ namespace flutter_libnx {
 namespace {
 
 constexpr int kOutputRate = 48000;
+// Каналов конечной шины. Совпадает с num_mix_buffers в конфиге и со вторым
+// аргументом audrvCreate.
+constexpr int kOutputChannels = 2;
 // Игра держит до 31 плеера одновременно (audio_service.dart: сумма пулов 30
 // плюс bgm), плюс запас на загрузку файла до воспроизведения.
 constexpr int kMaxVoices = 32;
 constexpr int kSlotsPerVoice = 4;
 constexpr int kSrcRate = 44100;
-constexpr int kSlotOutSamples = 2304;  // 1152 отсчёта MP3 после растяжения
+// Кадр рендерера при 48 кГц - AUDREN_SAMPLES_PER_FRAME_48KHZ отсчётов, и
+// сервис ждёт буферы, кратные этому шагу. 2400 = 10 кадров = 50 мс.
+constexpr int kSlotOutSamples = 2400;
+// 44100/48000 = 147/160 ровно. Ресемплинг идёт целыми числами в единицах
+// 1/160 отсчёта: накопление ошибки в double за сотни тысяч отсчётов даёт
+// щелчки на стыках порций.
+constexpr int kSrcStep160 = 147;   // на сколько сотых отсчёта шагаем за выход
+constexpr int kScale160 = 160;
+// Сколько входных отсчётов нужно на одну порцию: out * 44100 / 48000.
+// При 2400 выходных ровно 2205 входных - и перенос дробной части между
+// порциями равен нулю, то есть ничего не приходится обрезать.
+constexpr int kSlotInSamples = (kSlotOutSamples * kSrcRate) / kOutputRate;
 
 // Команда из метода канала в аудио-поток. Всё, что может блокировать
 // (открытие файла, декодирование), выполняется уже в потоке.
@@ -100,9 +115,17 @@ struct Voice {
   // Ресемплинг. src_tail хранит последний отсчёт прошлой порции плюс
   // текущую: интерполяция на стыке кадров иначе даёт щелчок.
   std::vector<int16_t> mono_tail;
-  double resample_carry = 0.0;
+  int resample_carry160 = 0;
 
   int64_t out_samples = 0;
+  // Сколько порций уже показали в лог: три с первых по каждому голосу
+  // хватает, чтобы отличить "декодер идёт" от "декодер молчит".
+  int log_slots = 0;
+  // Состояние последней сводки: сколько отсчётов сервис уже отдал.
+  u32 last_played = 0;
+  bool reported = false;
+  // Уже отправлено ли audio.onComplete для этого голоса.
+  bool reported_done = false;
 };
 
 class AudioEngine {
@@ -123,7 +146,7 @@ class AudioEngine {
         .num_effects = 0,
         .num_sinks = 1,
         .num_mix_objs = 1,
-        .num_mix_buffers = 2,
+        .num_mix_buffers = kOutputChannels,
     };
 
     Result res = audrenInitialize(&kConfig);
@@ -133,7 +156,7 @@ class AudioEngine {
     }
     inited_audren_ = true;
 
-    res = audrvCreate(&driver_, &kConfig, 2);
+    res = audrvCreate(&driver_, &kConfig, kOutputChannels);
     if (R_FAILED(res)) {
       *error = "audrvCreate: " + std::to_string(res);
       CloseDriver();
@@ -164,14 +187,37 @@ class AudioEngine {
       return false;
     }
 
+    // Выход к устройству. Без этой строки у конечной шины нет адресата:
+    // _audrvInitConfig в libnx заполняет только etc-копию массива стоков,
+    // а d->in_sinks[0] остаётся нулевым, то есть type = Invalid и
+    // is_used = false. Рендерер тогда считает в пустоту: отсчёты уходят,
+    // played_sample_count остаётся нулём, звука нет. Строка есть в эталоне
+    // audren-simple - и именно её здесь не хватало.
+    static const u8 kSinkChannels[kOutputChannels] = {0, 1};
+    const int sink = audrvDeviceSinkAdd(&driver_, AUDREN_DEFAULT_DEVICE_NAME,
+                                        kOutputChannels, kSinkChannels);
+    if (sink < 0) {
+      *error = "audrvDeviceSinkAdd fehlgeschlagen";
+      CloseDriver();
+      return false;
+    }
+    LOG_INFO("Audio: Ausgang an '%s', %d Kanaele, Senke %d",
+             AUDREN_DEFAULT_DEVICE_NAME, kOutputChannels, sink);
+
     for (int i = 0; i < kMaxVoices; ++i) {
       Voice& voice = voices_[i];
-      const int base = i * kSlotsPerVoice * kSlotOutSamples;
+      // Раскладка ровно как в hwopus-decoder: data_raw указывает на НАЧАЛО
+      // области голоса, а слоты адресуются смещениями. Смещения измеряются
+      // в ОТСЧЁТАХ (элементах int16), а size - в байтах.
+      //
+      // Прошлая версия давала каждому слоту свой data_raw и брала смещение в
+      // байтах - сервис читал вдвое больше, чем в буфере есть, и голос
+      // молчал: played_sample_count оставался нулём.
       for (int s = 0; s < kSlotsPerVoice; ++s) {
         AudioDriverWaveBuf& buf = voice.slots[s];
         buf.data_raw = static_cast<uint8_t*>(mempool_) +
-                       (base + s * kSlotOutSamples) * sizeof(int16_t);
-        buf.size = kSlotOutSamples * sizeof(int16_t);
+                       (i * kSlotsPerVoice * kSlotOutSamples) * sizeof(int16_t);
+        buf.size = kSlotsPerVoice * kSlotOutSamples * sizeof(int16_t);
         buf.start_sample_offset = s * kSlotOutSamples;
         buf.end_sample_offset = buf.start_sample_offset;
       }
@@ -225,8 +271,14 @@ class AudioEngine {
         voice.volume = 1.0f;
         voice.rate = 1.0f;
         voice.out_samples = 0;
-        voice.resample_carry = 0.0;
+        voice.resample_carry160 = 0;
         voice.mono_tail.clear();
+        // Голос берётся из пула повторно, поэтому и счётчики для протокола
+        // надо сбросить - иначе сводка по нему больше не появится.
+        voice.log_slots = 0;
+        voice.last_played = 0;
+        voice.reported = false;
+        voice.reported_done = false;
         return i;
       }
     }
@@ -313,27 +365,82 @@ class AudioEngine {
 
   // Единственное место, где трогают драйвер.
   void AudioLoop() {
+    // Темп задаёт сам audrenWaitFrame() - так делает эталон audren-simple,
+    // и так же надо здесь.
+    //
+    // Предыдущая правка ставила сюда audrenGetFrameEvent(), потому что
+    // поврерила, будто цикл не ограничен по скорости. Вывод был ложным:
+    // время в протоколе считалось как тики, делённые на 1'000'000, то есть
+    // занижено в 52 раза. Реально 19 секунд музыки декодировались за 31
+    // секунду - нормальный темп. Ничего чинить там было не нужно.
+    u64 next_drops_report = 0;
     while (!stop_.load()) {
       audrenWaitFrame();
+      const u64 now = flutter_libnx::TickNow();
 
       DrainCommands();
 
       for (int i = 0; i < kMaxVoices; ++i) {
         Voice& voice = voices_[i];
-        if (!voice.used || !voice.open || voice.finished) {
+        if (!voice.used || !voice.open) {
           continue;
         }
+        if (voice.finished) {
+          // Декодировать больше нечего. Ждём, пока рендерер выдаст всё, что
+          // уже лежит в буферах, и только тогда сообщаем о завершении.
+          if (!voice.reported_done && !audrvVoiceIsPlaying(&driver_, i)) {
+            voice.reported_done = true;
+            std::lock_guard<std::mutex> guard(mutex_);
+            events_.push_back({i, false});  // audio.onComplete
+          }
+          continue;
+        }
+        // Erst Daten herein, dann starten. Umgekehrt startet die Stimme leer
+        // und laeuft sofort wieder leer an - das war die Reihenfolge
+        // zuerst, und danach war nichts hoerbar.
+        FillVoice(i, voice);
         if (!audrvVoiceIsPlaying(&driver_, i)) {
           audrvVoiceStart(&driver_, i);
           voice.started = true;
         }
-        FillVoice(i, voice);
       }
 
       const Result res = audrvUpdate(&driver_);
       if (R_FAILED(res)) {
         LOG_ERROR("Audio: audrvUpdate: %d", static_cast<int>(res));
         break;
+      }
+
+      // Drops zaehlen: sagen sie, ob der Dienst unsere Puffer nicht annimmt.
+      if (now >= next_drops_report) {
+        next_drops_report = now + flutter_libnx::UsToTick(1000000);
+        for (int i = 0; i < kMaxVoices; ++i) {
+          Voice& voice = voices_[i];
+          if (!voice.used || !voice.open || voice.finished) {
+            continue;
+          }
+          // Ключевая величина: сколько отсчётов сервис отдал на выход.
+          // Пока она растёт вместе с нашими отсчётами, звук идёт; если она
+          // стоит, а наши отсчёты растут - данные до сервиса не доходят.
+          const u32 played = audrvVoiceGetPlayedSampleCount(&driver_, i);
+          const u32 drops = audrvVoiceGetVoiceDropsCount(&driver_, i);
+          if (!voice.reported || played != voice.last_played) {
+            voice.reported = true;
+            voice.last_played = played;
+            char states[kSlotsPerVoice * 3 + 1] = {};
+            for (int s = 0; s < kSlotsPerVoice; ++s) {
+              char one[4] = {};
+              std::snprintf(one, sizeof(one), "%d,",
+                            static_cast<int>(voice.slots[s].state));
+              std::strncat(states, one,
+                           sizeof(states) - std::strlen(states) - 1);
+            }
+            LOG_INFO("Audio: Stimme %d - unsere %lld, abgespielt %u, "
+                     "verworfen %u, Puffer %s",
+                     i, static_cast<long long>(voice.out_samples), played,
+                     drops, states);
+          }
+        }
       }
     }
 
@@ -398,14 +505,22 @@ class AudioEngine {
     voice.channels = voice.decoder.info.channels >= 2 ? 2 : 1;
     voice.open = true;
     voice.finished = false;
+    voice.reported_done = false;
     voice.out_samples = 0;
-    voice.resample_carry = 0.0;
+    voice.resample_carry160 = 0;
     voice.mono_tail.clear();
 
     if (inited_driver_) {
-      audrvVoiceInit(&driver_, id, voice.channels, PcmFormat_Int16,
-                     voice.decoder.info.hz > 0 ? voice.decoder.info.hz
-                                               : kOutputRate);
+      // Частота голоса - всегда частота рендера, а не источника. Данные после
+      // ресемплинга уже в 48 кГц; дополнительно сообщать частоту файла
+      // означало бы посчитать понижение дважды - ровно та путаница между
+      // кадрами источника и выхода, из-за которой в horizon-wine
+      // (PR autorun#69) понадобились отдельные счётчики.
+      if (!audrvVoiceInit(&driver_, id, voice.channels, PcmFormat_Int16,
+                          kOutputRate)) {
+        LOG_ERROR("Audio: Stimme %d liess sich nicht einrichten (%d Kanal)", id,
+                  voice.channels);
+      }
       audrvVoiceSetDestinationMix(&driver_, id, AUDREN_FINAL_MIX_ID);
       if (voice.channels == 1) {
         // Моно в оба канала - иначе голос слышен только слева.
@@ -423,6 +538,7 @@ class AudioEngine {
              static_cast<long>(voice.decoder.detected_samples * 1000 / rate));
     // Готовность - отдельным событием: Dart ждёт именно audio.onPrepared
     // (audioplayer.dart:358), возврата метода ему мало.
+    std::lock_guard<std::mutex> guard(mutex_);
     events_.push_back({id, true});
   }
 
@@ -462,13 +578,22 @@ class AudioEngine {
 
       // mp3dec_ex_read отдаёт значения с учётом чередования каналов, то есть
       // просим samples * channels int16 на samples отсчётов на канал.
-      std::vector<int16_t> raw(kSlotOutSamples * voice.channels);
+      // Просим ровно столько входных отсчётов, сколько нужно на порцию.
+      // Раньше бралось kSlotOutSamples, то есть на 195 лишних, которые потом
+      // молча выбрасывались вместе с куском сигнала.
+      std::vector<int16_t> raw(kSlotInSamples * voice.channels);
       const size_t got = mp3dec_ex_read(&voice.decoder, raw.data(),
-                                        static_cast<size_t>(kSlotOutSamples) *
+                                        static_cast<size_t>(kSlotInSamples) *
                                             voice.channels);
       if (got == 0) {
+        // Декодер дочитал файл. Но это НЕ значит, что звук прозвучал: у
+        // голоса в рендерере ещё лежит около 170 мс уже декодированного.
+        // Событие завершения отправляем ниже, когда очередь действительно
+        // опустеет - иначе голос освобождается на середине звука, и хвост
+        // обрывается.
         voice.finished = true;
-        events_.push_back({id, false});  // audio.onComplete
+        LOG_INFO("Audio: Stimme %d zu Ende, %lld Abtastwerte gesamt", id,
+                 static_cast<long long>(voice.out_samples));
         return;
       }
 
@@ -492,41 +617,73 @@ class AudioEngine {
                      static_cast<size_t>(written) * voice.channels *
                          sizeof(int16_t));
       voice.out_samples += written;
-      buf.end_sample_offset =
-          buf.start_sample_offset + written * voice.channels;
-      audrvVoiceAddWaveBuf(&driver_, id, &buf);
+      if (voice.log_slots < 3) {
+        voice.log_slots++;
+        // Размах данных в слоте. Ноль означал бы, что виноват декодер или
+        // ресемплинг; ненулевое значение при полной тишине означало бы, что
+        // данные на месте, а теряются они уже на выходе.
+        int peak = 0;
+        for (int i = 0; i < written; ++i) {
+          const int magnitude = dst[i] < 0 ? -dst[i] : dst[i];
+          if (magnitude > peak) {
+            peak = magnitude;
+          }
+        }
+        LOG_INFO("Audio: Stimme %d -> %d Abtastwerte in Slot %d (Spitze %d)", id,
+                 written, s, peak);
+      }
+      buf.start_sample_offset = s * kSlotOutSamples;
+      buf.end_sample_offset = buf.start_sample_offset + written;
+      if (!audrvVoiceAddWaveBuf(&driver_, id, &buf)) {
+        LOG_ERROR("Audio: Stimme %d, Slot %d abgelehnt (Zustand %d)", id, s,
+                  static_cast<int>(buf.state));
+      }
       return;
     }
   }
 
   // 44,1 кГц -> 48 кГц линейной интерполяцией. Возвращает отсчётов на канал.
+  //
+  // Позиция живёт в сотых долях отсчёта (carry160), чтобы не копить ошибку.
+  // Обнулять отрицательный перенос нельзя: отрицательный перенос означает,
+  // что входных отсчётов в порции больше, чем нужно на выход, и хвост пришлось
+  // бы выбросить. Раньше это происходило с каждым слотом - терялось 195
+  // отсчётов из 2400, то есть 8,1 % сигнала. На слух это две поломки сразу:
+  // данные 44,1 кГц игрались как 48 кГц (тон выше и быстрее на 8,8 %, «сжатый»
+  // звук) и каждые 54 мс пропадал кусок в 4,4 мс (прерывистость).
   int Resample(Voice& voice, const int16_t* mono, int samples, int16_t* dst) {
     if (samples <= 0) {
       return 0;
     }
-    constexpr double kStep = static_cast<double>(kSrcRate) / kOutputRate;
 
     voice.mono_tail.push_back(mono[0]);
     voice.mono_tail.insert(voice.mono_tail.end(), mono, mono + samples);
 
-    double position = voice.resample_carry;
+    int carry160 = voice.resample_carry160;
     int written = 0;
     const int total = static_cast<int>(voice.mono_tail.size());
     while (written < kSlotOutSamples) {
-      const int index = static_cast<int>(position);
-      if (index + 1 >= total) {
+      const int index = carry160 / kScale160;
+      if (index + 1 >= total || index < 0) {
         break;
       }
       const int left = voice.mono_tail[static_cast<size_t>(index)];
       const int right = voice.mono_tail[static_cast<size_t>(index + 1)];
-      const double frac = position - index;
-      dst[written] = static_cast<int16_t>(left + (right - left) * frac);
+      const int frac = carry160 % kScale160;
+      dst[written] =
+          static_cast<int16_t>(left + (right - left) * frac / kScale160);
       written++;
-      position += kStep;
+      carry160 += kSrcStep160;
     }
-    voice.resample_carry = position - (total - 1);
-    if (voice.resample_carry < 0.0) {
-      voice.resample_carry = 0.0;
+
+    // Следующая порция начинается с последнего отсчёта текущей, поэтому
+    // позицию сдвигаем на него. При штатном размере слота результат равен
+    // нулю; при коротком последнем куске сохраняет дробную часть.
+    const int shift = (total - 1) * kScale160;
+    voice.resample_carry160 = carry160 - shift;
+    if (voice.resample_carry160 < 0) {
+      // Порция входных короче, чем нужно: держим позицию у её конца.
+      voice.resample_carry160 = 0;
     }
 
     // Оставляем последний отсчёт для стыка с следующей порцией.

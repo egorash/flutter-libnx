@@ -80,16 +80,27 @@ int AllocateVoice() {
   // Сначала ищем жертву среди доигравших: оборвать уже закончивший звук
   // не слышно. Только если таких нет - берём самого старого, он звучит
   // дольше всех и теряет своё место первым.
+  // Только игроки, которые реально держат голос: у остальных в таблице -1,
+  // и передавать его в flutter_libnx_audio_voice_idle нельзя.
   const std::string* victim = nullptr;
   for (const std::string& candidate : PlayerOrder()) {
     const auto it = Players().find(candidate);
-    if (it != Players().end() && flutter_libnx_audio_voice_idle(it->second)) {
+    if (it != Players().end() && it->second >= 0 &&
+        flutter_libnx_audio_voice_idle(it->second)) {
       victim = &candidate;
       break;
     }
   }
   if (victim == nullptr) {
-    victim = &PlayerOrder().front();
+    for (const std::string& candidate : PlayerOrder()) {
+      if (Players().count(candidate) != 0 && Players().at(candidate) >= 0) {
+        victim = &candidate;
+        break;
+      }
+    }
+  }
+  if (victim == nullptr) {
+    return -1;
   }
 
   const auto it = Players().find(*victim);
@@ -111,15 +122,21 @@ int AllocateVoice() {
   return flutter_libnx_audio_create_player();
 }
 
-std::map<int, EventChannel>& Streams() {
-  static std::map<int, EventChannel> streams;
+// Ключ - playerId, а НЕ номер голоса. Поток на стороне Dart принадлежит
+// плееру (имя канала строится из его id), а голос - внутреннее дело: с тех
+// пор, как выделение перенесено на setSource, он меняется за жизнь плеера
+// (сначала -1, потом выдан, после завершения возвращён). Таблица по
+// голосам отдавала события мимо подписки: 191 таймаут onPrepared при
+// полностью рабочем звуке.
+std::map<std::string, EventChannel>& Streams() {
+  static std::map<std::string, EventChannel> streams;
   return streams;
 }
 
 // Готовность игроков, событие о которой ещё не доставлено. Сбрасывается по
 // факту отправки, поэтому повторов не бывает.
-std::map<int, bool>& PendingPrepared() {
-  static std::map<int, bool> pending;
+std::map<std::string, bool>& PendingPrepared() {
+  static std::map<std::string, bool> pending;
   return pending;
 }
 
@@ -212,6 +229,38 @@ int VoiceOf(const std::string& player) {
   return it == Players().end() ? -1 : it->second;
 }
 
+// Голос плеера, выделяя при первом обращении. Таблица уже заперта снаружи.
+int EnsureVoiceLocked(const std::string& player) {
+  auto it = Players().find(player);
+  if (it == Players().end()) {
+    return -1;
+  }
+  if (it->second >= 0) {
+    return it->second;
+  }
+  const int voice = AllocateVoice();
+  if (voice >= 0) {
+    it->second = voice;
+  }
+  return voice;
+}
+
+// То же, но с блокировкой таблицы.
+int EnsureVoice(const std::string& player) {
+  std::lock_guard<std::mutex> guard(TableMutex());
+  return EnsureVoiceLocked(player);
+}
+
+// Кому принадлежит голос. Поток адресуется игроку, а не голосу.
+std::string OwnerOfVoice(int voice) {
+  for (const auto& entry : Players()) {
+    if (entry.second == voice) {
+      return entry.first;
+    }
+  }
+  return std::string();
+}
+
 // Ответ для игрока без голоса. Позиция и длительность - ноль, остальное -
 // пустое значение: так Dart продолжает работать, а не падает.
 StdValue BenignValueFor(const std::string& method) {
@@ -264,21 +313,51 @@ bool flutter_libnx_audioplayers_handle(
   const std::string player = PlayerKey(args);
 
   if (method == "create") {
-    const int voice = AllocateVoice();
-    if (voice < 0) {
-      RespondError(engine, message, "no_voices", "keine freie Audio-Stimme");
-      return true;
-    }
+    // Голоса здесь НЕ занимаем. create приходит из конструктора
+    // AudioPlayer, то есть на каждый созданный плеер - даже на тот, который
+    // никогда не зазвучит. Игра держит пул из 30 плееров плюс фоновую
+    // музыку и создаёт новые поверх; при выделении голоса на create уже
+    // второй прогон подряд не хватало голосов 265 раз из 297, и каждый раз
+    // оборвался чужой, ещё звучавший звук. Отсюда «звук очень плохо».
+    //
+    // Теперь -1 означает «голоса нет», он берётся при setSource и
+    // возвращается по завершении.
     std::lock_guard<std::mutex> guard(TableMutex());
-    Players()[player] = voice;
-    PlayerOrder().push_back(player);
-    LOG_INFO("audioplayers: Player %s -> Stimme %d", player.c_str(), voice);
+    if (Players().find(player) == Players().end()) {
+      Players()[player] = -1;
+      PlayerOrder().push_back(player);
+    }
     Respond(engine, message, StdValue::Null());
     return true;
   }
 
   if (player.empty()) {
     RespondError(engine, message, "bad_player", "playerId fehlt");
+    return true;
+  }
+
+  // ВНИМАНИЕ: этот блок обязан стоять ДО проверки voice < 0. Он сам
+  // выделяет голос. Пока он стоял ниже, каждый setSource доходил только до
+  // безобидного ответа на «нет голоса»: звука не было совсем, ни одного
+  // открытого источника за прогон.
+  if (method == "setSourceUrl" || method == "setSourceBytes") {
+    const std::string path = PercentDecode(Text(args, "url"));
+    if (path.empty()) {
+      RespondError(engine, message, "bad_source", "setSourceUrl ohne url");
+      return true;
+    }
+    // Голос берём здесь, а не на create: сюда приходит и ассет, и всё
+    // остальное. Именно в этот момент плеер начинает занимать ресурс.
+    const int with_voice = EnsureVoice(player);
+    if (with_voice < 0) {
+      RespondError(engine, message, "no_voices", "keine freie Audio-Stimme");
+      return true;
+    }
+    std::string error;
+    flutter_libnx_audio_set_source(with_voice, path, &error);
+    LOG_INFO("audioplayers: Player %s -> Stimme %d", player.c_str(),
+             with_voice);
+    Respond(engine, message, StdValue::Null());
     return true;
   }
 
@@ -300,10 +379,15 @@ bool flutter_libnx_audioplayers_handle(
   }
 
   if (method == "dispose") {
-    flutter_libnx_audio_release_player(voice);
+    // Голос мог быть уже возвращён по завершении - тогда -1, и освобождать
+    // нечего.
+    if (voice >= 0) {
+      flutter_libnx_audio_release_player(voice);
+    }
     std::lock_guard<std::mutex> guard(TableMutex());
     Players().erase(player);
-    Streams().erase(voice);
+    Streams().erase(player);
+    PendingPrepared().erase(player);
     auto& order = PlayerOrder();
     for (auto it = order.begin(); it != order.end(); ++it) {
       if (*it == player) {
@@ -316,17 +400,6 @@ bool flutter_libnx_audioplayers_handle(
   }
   if (method == "release") {
     flutter_libnx_audio_release_source(voice);
-    Respond(engine, message, StdValue::Null());
-    return true;
-  }
-  if (method == "setSourceUrl" || method == "setSourceBytes") {
-    const std::string path = PercentDecode(Text(args, "url"));
-    if (path.empty()) {
-      RespondError(engine, message, "bad_source", "setSourceUrl ohne url");
-      return true;
-    }
-    std::string error;
-    flutter_libnx_audio_set_source(voice, path, &error);
     Respond(engine, message, StdValue::Null());
     return true;
   }
@@ -412,22 +485,13 @@ bool flutter_libnx_audioplayers_stream_handle(
   }
   const std::string player = channel_name.substr(prefix.size());
 
-  int voice = -1;
-  {
-    std::lock_guard<std::mutex> guard(TableMutex());
-    voice = VoiceOf(player);
-  }
-  if (voice < 0) {
-    // Канал пришёл раньше create (или после dispose) - отвечаем ошибкой,
-    // как это делает Dart-обёртка для неизвестного потока.
-    return false;
-  }
-
+  // Голоса у плеера может не быть вовсе: подписка на поток приходит
+  // раньше первого звука, и это нормально.
   std::lock_guard<std::mutex> guard(TableMutex());
   auto& streams = Streams();
-  auto it = streams.find(voice);
+  auto it = streams.find(player);
   if (it == streams.end()) {
-    it = streams.emplace(voice, EventChannel(channel_name)).first;
+    it = streams.emplace(player, EventChannel(channel_name)).first;
   }
   return it->second.HandleMessage(engine, message);
 }
@@ -440,20 +504,34 @@ void flutter_libnx_audioplayers_pump(
   bool prepared = false;
   while (flutter_libnx_audio_pop_event(&voice, &prepared)) {
     std::lock_guard<std::mutex> guard(TableMutex());
+    const std::string owner = OwnerOfVoice(voice);
+    if (owner.empty()) {
+      continue;  // голос уже свободен и никому не принадлежит
+    }
     if (prepared) {
       // Dart ещё не подписан: create() в пакете поток вообще не создаёт,
       // а listen уходит только при первой подписке. Отправленное событие
       // пропало бы, и play() ждал бы своих 30 секунд. Поэтому готовность
       // запоминаем и отдаём, как только поток действительно слушают.
-      PendingPrepared()[voice] = true;
-    } else {
-      // Завершение можно потерять: кто не слушал, того и не жалко.
-      auto it = Streams().find(voice);
-      if (it == Streams().end() || !it->second.IsListening()) {
-        continue;
-      }
-      SendStreamEvent(engine, it->second, "audio.onComplete", StdValue::Null());
+      PendingPrepared()[owner] = true;
+      LOG_INFO("audioplayers: Stimme %d ist bereit (warte auf Abonnenten)", voice);
+      continue;
     }
+
+    // Завершение можно потерять: кто не слушал, того и не жалко.
+    auto stream = Streams().find(owner);
+    if (stream != Streams().end() && stream->second.IsListening()) {
+      SendStreamEvent(engine, stream->second, "audio.onComplete",
+                      StdValue::Null());
+    }
+
+    // Голос возвращается в пул СРАЗУ по завершении. Иначе пул снова
+    // забьётся: Dart держит плееры живыми между звуками.
+    //
+    // Поток при этом НЕ трогаем: он принадлежит игроку, и подписка Dart на
+    // него должна пережить любое число звуков.
+    flutter_libnx_audio_release_player(voice);
+    Players()[owner] = -1;
   }
 
   std::lock_guard<std::mutex> guard(TableMutex());
@@ -465,6 +543,10 @@ void flutter_libnx_audioplayers_pump(
     if (it == Streams().end() || !it->second.IsListening()) {
       continue;
     }
+    // Без этой строки видно только, что голос стал готовым, но не то,
+    // дошло ли событие до Dart. Именно его ждёт _completePrepared.
+    LOG_INFO("audioplayers: onPrepared fuer Player %s gesendet",
+             entry.first.c_str());
     SendStreamEvent(engine, it->second, "audio.onPrepared",
                     StdValue::Bool(true));
     entry.second = false;
