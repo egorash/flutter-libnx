@@ -136,6 +136,11 @@ $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
+# Das romfs dieser Probe bleibt leer, und ein leeres Verzeichnis fuehrt git
+# nicht. Ohne dieses mkdir schlaegt der NRO-Schritt auf einem frischen Klon
+# mit "Failed to open directory .../romfs!" fehl. Anlegen ist hier die richtige
+# Loesung; eine .gitkeep-Datei waere nur eine Kruecke dafuer.
+
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...

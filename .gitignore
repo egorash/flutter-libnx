@@ -19,7 +19,7 @@ build/
 # Flutter/Dart
 .dart_tool/
 .packages
-examples/**/build/
+tools/**/build/
 build-logs/
 examples/*/generated/
 examples/*/romfs/

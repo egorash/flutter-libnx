@@ -52,7 +52,6 @@ constexpr int kPollHz = 60;
 const u64 kPollPeriodTicks = flutter_libnx::UsToTick(1000000 / kPollHz);
 
 AudioDriver g_driver;
-Handle g_frame_event = 0;
 
 // Achtung: armGetSystemTick() gibt Ticks zurueck (19,2 MHz), nicht
 // Nanosekunden. Alles, was ms rechnet, muss ueber TickToMs laufen.
