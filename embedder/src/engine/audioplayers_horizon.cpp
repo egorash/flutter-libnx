@@ -48,6 +48,13 @@ std::map<int, EventChannel>& Streams() {
   return streams;
 }
 
+// Готовность игроков, событие о которой ещё не доставлено. Сбрасывается по
+// факту отправки, поэтому повторов не бывает.
+std::map<int, bool>& PendingPrepared() {
+  static std::map<int, bool> pending;
+  return pending;
+}
+
 std::mutex& TableMutex() {
   static std::mutex mutex;
   return mutex;
@@ -140,6 +147,18 @@ std::string PercentDecode(const std::string& text) {
 int VoiceOf(const std::string& player) {
   auto it = Players().find(player);
   return it == Players().end() ? -1 : it->second;
+}
+
+// Отправляет событие игрока в его поток. Формат - словарь с полями
+// event/value, как ждёт Dart (audioplayers_platform.dart:242-265).
+void SendStreamEvent(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                     EventChannel& stream,
+                     const std::string& name,
+                     const StdValue& value) {
+  StdValue payload = StdValue::Map();
+  payload.as_map.emplace_back(StdValue::String("event"), StdValue::String(name));
+  payload.as_map.emplace_back(StdValue::String("value"), value);
+  stream.SendEvent(engine, payload);
 }
 
 }  // namespace
@@ -324,21 +343,34 @@ void flutter_libnx_audioplayers_pump(
   bool prepared = false;
   while (flutter_libnx_audio_pop_event(&voice, &prepared)) {
     std::lock_guard<std::mutex> guard(TableMutex());
-    auto& streams = Streams();
-    auto it = streams.find(voice);
-    if (it == streams.end()) {
-      // Dart ещё не подписался на поток игрока: событие некуда девать.
+    if (prepared) {
+      // Dart ещё не подписан: create() в пакете поток вообще не создаёт,
+      // а listen уходит только при первой подписке. Отправленное событие
+      // пропало бы, и play() ждал бы своих 30 секунд. Поэтому готовность
+      // запоминаем и отдаём, как только поток действительно слушают.
+      PendingPrepared()[voice] = true;
+    } else {
+      // Завершение можно потерять: кто не слушал, того и не жалко.
+      auto it = Streams().find(voice);
+      if (it == Streams().end() || !it->second.IsListening()) {
+        continue;
+      }
+      SendStreamEvent(engine, it->second, "audio.onComplete", StdValue::Null());
+    }
+  }
+
+  std::lock_guard<std::mutex> guard(TableMutex());
+  for (auto& entry : PendingPrepared()) {
+    if (!entry.second) {
       continue;
     }
-
-    StdValue payload = StdValue::Map();
-    payload.as_map.emplace_back(
-        StdValue::String("event"),
-        StdValue::String(prepared ? "audio.onPrepared" : "audio.onComplete"));
-    payload.as_map.emplace_back(
-        StdValue::String("value"),
-        prepared ? StdValue::Bool(true) : StdValue::Null());
-    it->second.SendEvent(engine, payload);
+    auto it = Streams().find(entry.first);
+    if (it == Streams().end() || !it->second.IsListening()) {
+      continue;
+    }
+    SendStreamEvent(engine, it->second, "audio.onPrepared",
+                    StdValue::Bool(true));
+    entry.second = false;
   }
 }
 
