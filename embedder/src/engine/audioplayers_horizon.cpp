@@ -32,7 +32,9 @@ namespace flutter_libnx {
 namespace {
 
 const char kChannel[] = "xyz.luan/audioplayers";
+const char kGlobalChannel[] = "xyz.luan/audioplayers.global";
 const char kStreamPrefix[] = "xyz.luan/audioplayers/events/";
+const char kGlobalStream[] = "xyz.luan/audioplayers.global/events";
 
 using flutter_libnx::StdValue;
 
@@ -166,6 +168,7 @@ void SendStreamEvent(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 
 extern "C" {
 
+// Обработчик MethodChannel xyz.luan/audioplayers (команды игроков).
 bool flutter_libnx_audioplayers_handle(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterPlatformMessage* message,
@@ -174,14 +177,13 @@ bool flutter_libnx_audioplayers_handle(
   using namespace flutter_libnx;
 
   // Глобальный контекст на Switch не имеет смысла: один вывод звука,
-  // постоянная громкость. Успех вместо MissingPluginException.
+  // постоянная громкость, прерывающих событий нет. Успех вместо
+  // MissingPluginException - иначе падает уже GlobalAudioScope при старте.
   if (method == "resumeAudioContext" || method == "suspendAudioContext" ||
-      method == "setApplicationContext" || method == "getApplicationContext") {
+      method == "setAudioContext" || method == "setApplicationContext" ||
+      method == "getApplicationContext" || method == "emitLog" ||
+      method == "emitError" || method == "getActivePlayers") {
     Respond(engine, message, StdValue::Null());
-    return true;
-  }
-  if (method == "getActivePlayers") {
-    Respond(engine, message, StdValue::List());
     return true;
   }
   if (method == "getDevices" || method == "setDeviceId") {
@@ -309,6 +311,17 @@ bool flutter_libnx_audioplayers_stream_handle(
     const std::string& channel_name) {
   using namespace flutter_libnx;
 
+  // Globale Ereignisse (Kontext/Unterbrechungen). Auf Switch gibt es keine
+  // Unterbrechungen - Telefonat, Kopfhoerer - deshalb sind die Ereignisse nur
+  // formale Pflicht: listen muss beantwortet werden, gesendet wird nichts.
+  //
+  // Ohne das bricht GlobalAudioScope schon beim Start ab: er abonniert den
+  // Strom im Konstruktor, und die Exception fliegt durch main().
+  if (channel_name == kGlobalStream) {
+    static EventChannel global_stream(kGlobalStream);
+    return global_stream.HandleMessage(engine, message);
+  }
+
   const std::string prefix = kStreamPrefix;
   if (channel_name.compare(0, prefix.size(), prefix) != 0) {
     return false;
@@ -372,6 +385,20 @@ void flutter_libnx_audioplayers_pump(
                     StdValue::Bool(true));
     entry.second = false;
   }
+}
+
+// Обработчик глобального MethodChannel xyz.luan/audioplayers.global.
+// Все методы (init, setAudioContext, emitLog, emitError) отвечают успехом:
+// на Switch один вывод звука и нет прерываний.
+bool flutter_libnx_audioplayers_global_handle(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessage* message,
+    const std::string& method,
+    const flutter_libnx::StdValue& args) {
+  using namespace flutter_libnx;
+  LOG_INFO("audioplayers.global: %s", method.c_str());
+  Respond(engine, message, StdValue::Null());
+  return true;
 }
 
 }  // extern "C"

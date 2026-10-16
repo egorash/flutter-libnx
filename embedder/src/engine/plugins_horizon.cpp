@@ -52,6 +52,12 @@ extern "C" bool flutter_libnx_audioplayers_handle(
     const std::string& method,
     const flutter_libnx::StdValue& args);
 
+extern "C" bool flutter_libnx_audioplayers_global_handle(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessage* message,
+    const std::string& method,
+    const flutter_libnx::StdValue& args);
+
 extern "C" void flutter_libnx_audioplayers_pump(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
@@ -883,6 +889,10 @@ ChannelRegistry MakeRegistry() {
   r.method["flutter.baseflow.com/geolocator"] = HandleGeolocator;
   r.method["plugins.flutter.io/image_picker"] = HandleImagePicker;
   r.method["xyz.luan/audioplayers"] = flutter_libnx_audioplayers_handle;
+  // Globaler Kanal des Plugins. Ohne ihn bricht GlobalAudioScope schon beim
+  // Start ab (er ruft init() und abonniert den Ereignisstrom).
+  r.method["xyz.luan/audioplayers.global"] =
+      flutter_libnx_audioplayers_global_handle;
   return r;
 }
 
