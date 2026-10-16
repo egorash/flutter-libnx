@@ -49,6 +49,15 @@ CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 # Quelltext zu stehen - jede App bekommt so automatisch ihr eigenes.
 CFLAGS	+=	-DFLUTTER_LIBNX_APP_ID=\"$(TARGET)\"
 
+# Das Pad spricht NICHT mehr ueber die Tastatur mit dem Framework, sondern
+# ausschliesslich ueber das Plugin gamepads. Grund sind zwei Zustandsquellen
+# fuer dieselben Pfeiltasten: die Spielelogik gewichtet sie als Prioritaet,
+# nicht als Zusammenfuehrung (InputController._recompute). Verliert einer
+# der Wege das Loslassen, bleibt die Figur seitwaerts stehen.
+# Bei 1 (Vorgabe im Embedder) bleibt die Tastaturweiterleitung erhalten -
+# fuer Apps ohne Gamepad-Plugin ist sie die einzige Eingabequelle.
+CFLAGS	+=	-DFLUTTER_LIBNX_PAD_KEYBOARD=0
+
 #---------------------------------------------------------------------------------
 # Fuer Horizon gebaute Flutter Engine.
 #

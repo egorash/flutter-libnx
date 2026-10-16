@@ -510,9 +510,30 @@ void KeyEventCallback(bool handled, void* user_data) {
   }
 }
 
+// Reicht das Pad als Tastatur an Flutter durch - oder nicht.
+//
+// Standard ist "ja", weil das fuer Apps ohne Gamepad-Plugin die einzige
+// Eingabequelle ist. Fuer romashka_game wird es abgeschaltet: dort kommt der
+// Eingang ueber das Plugin gamepads, und beide Wege befuellen dieselben
+// Pfeiltasten. Die Spielelogik gewichtet sie als Prioritaet, nicht als
+// Zusammenfuehrung (InputController._recompute): der Gamelog hat Vorrang,
+// doch der Tastaturzustand lebt weiter neben ihm. Verliert einer der Wege
+// das Loslassen, bleibt die Figur seitwaerts stehen.
+//
+// Der virtuelle Zeiger ist nicht betroffen: er liest den Padzustand
+// direkt und verschickt Zeigerereignisse, keine Tastenereignisse.
+#ifndef FLUTTER_LIBNX_PAD_KEYBOARD
+#define FLUTTER_LIBNX_PAD_KEYBOARD 1
+#endif
+
 void SendKeyEvents(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                    const flutter_libnx::SwitchPlatform& platform,
                    u64 suppress_mask) {
+#if !FLUTTER_LIBNX_PAD_KEYBOARD
+  (void)engine;
+  (void)platform;
+  (void)suppress_mask;
+#else
   if (engine == nullptr) {
     return;
   }
@@ -575,6 +596,7 @@ void SendKeyEvents(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                 is_down ? "down" : "up", static_cast<int>(sent));
     }
   }
+#endif  // FLUTTER_LIBNX_PAD_KEYBOARD
 }
 
 // Platform Channels: die erste echte Rückrichtung Dart -> Plattform.

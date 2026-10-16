@@ -42,3 +42,4 @@ examples/*/icon.jpg
 # Lokale Build-/Checkout-Ausgaben des macOS-Ports
 out/
 __pycache__/ 
+examples/romashka_game/*
