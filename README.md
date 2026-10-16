@@ -1,272 +1,168 @@
 # flutter-libnx
 
-**Run unmodified Flutter apps on the Nintendo Switch (homebrew).**
-**Unveränderte Flutter-Apps auf der Nintendo Switch (Homebrew).**
+**Flutter Engine на Nintendo Switch.** Немодифицированное приложение на
+Flutter → один `.nro`, который запускается на консоли.
 
-[English](#english) · [Deutsch](#deutsch)
+Порт работает: на железе собран и запущен
+[`examples/romashka_game`](examples/romashka_game) — со звуком, кнопками и
+аналоговыми стиками.
 
-![status](https://img.shields.io/badge/status-experimental-orange)
-![platform](https://img.shields.io/badge/platform-Horizon%20OS%20(libnx)-red)
-![flutter](https://img.shields.io/badge/Flutter-3.41.6-blue)
-
----
-
-## English
-
-### What is this?
-
-flutter-libnx is a port of the **Flutter engine** to Horizon OS, the operating
-system of the Nintendo Switch, built on the homebrew toolchain
-([devkitPro](https://devkitpro.org/)/libnx). The goal is a **general-purpose
-tool**: take an *unmodified* Flutter project, run one build script, get a
-single `.nro` homebrew file that runs on the console.
-
-This is not a proof of concept that draws a triangle. A real, unmodified
-everyday app (a recipe manager with database, full-text search, file import
-and system keyboard) runs, is fully usable, and survives restarts.
-
-### What works today
-
-| Area | Status |
-|---|---|
-| Flutter framework (`runApp`, Material, animations, fonts) | ✅ on hardware |
-| Touch input | ✅ |
-| Controller input (D-pad/stick moves focus, A activates) | ✅ |
-| On-screen keyboard (system swkbd applet) | ✅ |
-| Dart AOT (release mode, no JIT needed) | ✅ |
-| `dart:io` — files, sockets, TLS/HTTPS | ✅ |
-| sqlite3 via `dart:ffi` (incl. FTS5) — `drift`, `sqflite_common_ffi` | ✅ |
-| Plugins: `path_provider`, `shared_preferences`, `url_launcher` (system browser), `file_picker` (fixed import folder), `flutter_secure_storage` (plaintext, documented) | ✅ |
-| Platform channels (JSON + standard binary codec) | ✅ |
-| Rendering | Software renderer (12–15 fps under load); **GPU rendering via Mesa/nouveau in progress** |
-| Clean exit, repeated launches in the same host process | ✅ |
-
-### How it works (short version)
-
-* The **Flutter engine** (pinned: Flutter 3.41.6) is cross-compiled with
-  devkitA64 as a static library. `horizon` was added as a target OS to GN,
-  fml, the Dart VM (five platform files: threads, virtual memory, cpuinfo …)
-  and `dart:io` (poll-based event handler, loopback wake channel).
-* The **embedder** (this repo) provides everything the engine expects from a
-  platform: framebuffer or EGL surface, input, task runners, fonts from the
-  console's `pl:u` service, message loop, POSIX compatibility layer.
-* **No `dlopen` exists on Horizon.** FFI works anyway: native libraries
-  (e.g. sqlite3) are statically linked and resolved through an embedder hook
-  with generated symbol tables — `DynamicLibrary.open('libsqlite3.so')`
-  just works, apps don't notice.
-* **Plugins** are implemented in the embedder against their real method
-  channels, so unmodified pub.dev packages work. A generated "Horizon
-  registrant" replaces the plugin registrant that `flutter build` would
-  normally create.
-
-The full engineering journal — every bug, every dead end, every fix, with
-file/line evidence — lives in [`docs/status.md`](docs/status.md) and
-[`docs/porting-notes.md`](docs/porting-notes.md) (German).
-
-### Requirements
-
-* A Nintendo Switch capable of running homebrew (Atmosphère), **launched in
-  application mode** (hold R while starting a game → hbmenu). Applet mode has
-  only ~380 MB of RAM and will not run the framework.
-* Windows with WSL2 (the build chain uses both), ~40 GB disk for the engine
-  checkout, [devkitPro](https://devkitpro.org/) (a container image works —
-  no root needed).
-* Flutter SDK **3.41.6** (the engine version is pinned to its commit).
-
-### Building
-
-The chain, end to end:
-
-```text
-1. Engine checkout (gclient sync, ~26 GB, once)
-2. python3 scripts/patch-engine-horizon.py     # all Horizon patches, idempotent
-3. scripts/gn-gen-horizon.sh                   # GN config for horizon/arm64
-4. scripts/build-horizon.sh ...:flutter_engine_static
-5. bash scripts/build-sqlite3.sh               # sqlite3 + symbol table
-6. scripts/build-dart-app.ps1 -Project <your flutter project>
-                                               # assets via `flutter build bundle`,
-                                               # kernel, Horizon registrant
-7. wsl bash scripts/rebuild-all.sh ui_app      # AOT snapshot -> .nro
-8. scripts/nxlink-upload.ps1 -SwitchIp <ip> -Example ui_app
-```
-
-Steps 1–5 are one-time (per engine update). After that, iterating on an app
-is steps 6–7. `scripts/log-listener.ps1` receives the console's log over TCP
-(the console connects to your PC, so NAT/firewalls don't get in the way).
-
-> **Режимы сборки (порт macOS).** Описанная выше цепочка — историческая,
-> Windows/WSL. Актуальная для macOS: те же bash-скрипты с флагом режима —
-> `gn-gen-horizon.sh --mode release|debug`, `build-dart-app.sh --mode
-> release|debug`, `rebuild-all.sh --mode release|debug`; в debug additionally
-> поднимается VM-сервис. Обоснование и ограничения — `docs/build-modes-plan.md`.
-
-### Bringing your own app
-
-```powershell
-scripts/build-dart-app.ps1 -Project C:\path\to\your_flutter_app
-wsl bash /mnt/e/flutter-libnx/scripts/rebuild-all.sh ui_app
-```
-
-That's it — no changes to the app. Assets, fonts and manifests come from
-`flutter build bundle`; the packages your app uses are resolved through its
-own `package_config.json`. App data lives under
-`/switch/flutter_apps/<app-id>/` on the SD card; files to import go into
-the `import/` subfolder (there is no on-console file browser yet — the
-picker offers that folder's contents).
-
-### Known limitations
-
-* Software rendering caps at ~12–15 fps for full-screen redraws; the GPU
-  backend (OpenGL via switch-mesa/nouveau) is being brought up.
-* `flutter_secure_storage` stores **plaintext** (FAT has no keychain) — fine
-  for homebrew, not for real secrets. Documented in the code.
-* Video playback and WebView are out of scope for now (see
-  `docs/target-apps.md` for the analysis).
-* One display resolution (1280×720); docked scaling not yet implemented.
-
-### Legal
-
-This is an independent open-source project for **homebrew development on
-hardware you own**. It is not affiliated with, endorsed by, or supported by
-Nintendo or Google. Nintendo Switch is a trademark of Nintendo. No part of
-this project enables or condones piracy.
-
-Licenses: this repository is MIT (see [LICENSE](LICENSE)). It builds against
-the Flutter engine (BSD-3-Clause, patches in `patches/`), bundles the SQLite
-amalgamation (public domain) and one reference header from Flutter
-(`third_party/reference/embedder.h`, BSD-3-Clause).
+- Восходящий проект: `https://github.com/miri2577/flutter-libnx`
+- Форк: `https://github.com/egorash/flutter-libnx`
+- Движок закреплён на **Flutter 3.41.6**
 
 ---
 
-## Deutsch
+## Что работает сегодня
 
-### Was ist das?
-
-flutter-libnx ist eine Portierung der **Flutter-Engine** auf Horizon OS, das
-Betriebssystem der Nintendo Switch, aufgebaut auf der Homebrew-Toolchain
-([devkitPro](https://devkitpro.org/)/libnx). Das Ziel ist ein **allgemeines
-Werkzeug**: ein *unverändertes* Flutter-Projekt nehmen, ein Build-Skript
-laufen lassen, eine einzelne `.nro`-Homebrew-Datei bekommen, die auf der
-Konsole läuft.
-
-Das ist kein Machbarkeitsnachweis, der ein Dreieck zeichnet. Eine echte,
-unveränderte Alltags-App (eine Rezeptverwaltung mit Datenbank,
-Volltextsuche, Dateiimport und Systemtastatur) läuft, ist voll bedienbar
-und übersteht Neustarts.
-
-### Was heute funktioniert
-
-| Bereich | Stand |
+| Область | Состояние |
 |---|---|
-| Flutter-Framework (`runApp`, Material, Animationen, Schriften) | ✅ auf Hardware |
-| Touch-Eingabe | ✅ |
-| Controller (Steuerkreuz/Stick bewegt Fokus, A aktiviert) | ✅ |
-| Bildschirmtastatur (swkbd-Systemapplet) | ✅ |
-| Dart AOT (Release, kein JIT nötig) | ✅ |
-| `dart:io` — Dateien, Sockets, TLS/HTTPS | ✅ |
-| sqlite3 über `dart:ffi` (inkl. FTS5) — `drift`, `sqflite_common_ffi` | ✅ |
-| Plugins: `path_provider`, `shared_preferences`, `url_launcher` (Systembrowser), `file_picker` (fester Import-Ordner), `flutter_secure_storage` (Klartext, dokumentiert) | ✅ |
-| Platform Channels (JSON- und Standard-Binär-Codec) | ✅ |
-| Rendering | Software-Renderer (12–15 fps unter Last); **GPU über Mesa/nouveau in Arbeit** |
-| Sauberes Beenden, wiederholte Starts im selben Wirtsprozess | ✅ |
+| Flutter-фреймворк (`runApp`, Material, анимации, шрифты) | ✅ на железе |
+| GPU-рендеринг: EGL, OpenGL Core 4.3 через Mesa/nouveau | ✅ на железе |
+| Сенсорный ввод, экранные кнопки | ✅ |
+| Клавиатурный ввод, экранная клавиатура (applet `swkbd`) | ✅ |
+| **Звук**: MP3 через `audioplayers`, 32 голоса, микширование audren | ✅ на железе |
+| **Геймпад**: кнопки и стики через `gamepads`, вибрация | ✅ на железе |
+| Dart AOT (release, JIT не нужен) | ✅ |
+| `dart:io` — файлы, сокеты, TLS/HTTPS | ✅ |
+| sqlite3 через `dart:ffi` (включая FTS5): `drift`, `sqflite_common_ffi` | ✅ |
+| `path_provider`, `shared_preferences`, `url_launcher` (системный браузер), `file_picker`, `flutter_secure_storage`, `hive` | ✅ |
+| Платформенные каналы: JSON и стандартный бинарный кодек | ✅ |
 
-### Wie es funktioniert (Kurzfassung)
+---
 
-* Die **Flutter-Engine** (gepinnt: Flutter 3.41.6) wird mit devkitA64 als
-  statische Bibliothek cross-kompiliert. `horizon` wurde als Ziel-OS in GN,
-  fml, der Dart-VM (fünf Plattformdateien: Threads, virtueller Speicher,
-  cpuinfo …) und `dart:io` ergänzt (poll-basierter Eventhandler,
-  Loopback-Weckkanal).
-* Der **Embedder** (dieses Repo) stellt alles, was die Engine von einer
-  Plattform erwartet: Framebuffer bzw. EGL-Oberfläche, Eingabe, Task-Runner,
-  Systemschriften über den `pl:u`-Dienst, Nachrichtenschleife,
-  POSIX-Kompatibilitätsschicht.
-* **Horizon hat kein `dlopen`.** FFI funktioniert trotzdem: Native
-  Bibliotheken (z. B. sqlite3) werden statisch gelinkt und über einen
-  Embedder-Haken mit generierten Symboltabellen aufgelöst —
-  `DynamicLibrary.open('libsqlite3.so')` funktioniert einfach, Apps merken
-  nichts davon.
-* **Plugins** sind im Embedder gegen ihre echten Method-Channels
-  implementiert, unveränderte pub.dev-Pakete funktionieren daher. Ein
-  generierter „Horizon-Registrant" ersetzt den Plugin-Registrant, den
-  `flutter build` normalerweise erzeugt.
+## Как это устроено (коротко)
 
-Das vollständige Ingenieurs-Tagebuch — jeder Fehler, jede Sackgasse, jede
-Reparatur, mit Datei-/Zeilenbelegen — steht in
-[`docs/status.md`](docs/status.md) und
-[`docs/porting-notes.md`](docs/porting-notes.md).
+- **Движок Flutter** (закреплён на 3.41.6) кросс-компилируется под devkitA64
+  в статическую библиотеку. `horizon` добавлен как целевая ОС в GN, fml, Dart
+  VM (пять файлов платформы: потоки, виртуальная память, cpuinfo …) и
+  `dart:io` (опросный обработчик событий, loopback-канал пробуждения).
+- **Эмбеддер** (этот репозиторий) даёт движку всё, что она ждёт от платформы:
+  поверхность EGL, ввод, исполнители задач, шрифты из сервиса `pl:u`, цикл
+  сообщений, слой POSIX-совместимости.
+- **`dlopen` на Horizon не существует.** FFI всё равно работает: нативные
+  библиотеки (sqlite3) линкуются статически и резолвятся через хук эмбеддера
+  с сгенерированными таблицами символов — `DynamicLibrary.open('libsqlite3.so')`
+  работает, приложение ничего не замечает.
+- **Плагины** реализованы в эмбеддере против их настоящих каналов, поэтому
+  немодифицированные пакеты с pub.dev работают как есть. Сгенерированный
+  «Horizon-регистрант» заменяет тот регистрант, который создаёт
+  `flutter build`.
+- **Своё время.** `armGetSystemTick()` отдаёт тики, а не наносекунды; частота
+  19,2 МГц. Внутри кода — только тики, через
+  [`tick_clock.h`](embedder/include/flutter_libnx/tick_clock.h).
 
-### Voraussetzungen
+Инженерный журнал с разбором каждой ошибки:
+[`docs/journal-audio-gamepad.md`](docs/journal-audio-gamepad.md) (звук и ввод),
+[`docs/porting-notes.md`](docs/porting-notes.md) и
+[`docs/status.md`](docs/status.md) (меленты 0–5, на немецком).
 
-* Eine homebrew-fähige Nintendo Switch (Atmosphère), **im Anwendungsmodus
-  gestartet** (R gedrückt halten beim Spielstart → hbmenu). Der Applet-Modus
-  hat nur ~380 MB RAM — das Framework startet dort nicht.
-* Windows mit WSL2 (die Baukette nutzt beides), ~40 GB Platz für den
-  Engine-Checkout, [devkitPro](https://devkitpro.org/) (Container-Image
-  genügt — kein root nötig).
-* Flutter-SDK **3.41.6** (die Engine-Version ist auf dessen Commit gepinnt).
+---
 
-### Bauen
+## Требования
 
-Die Kette, von vorn bis hinten:
+- Nintendo Switch, способная запускать homebrew (Atmosphère), **в режиме
+  приложения** (удерживать R при старте игры → hbmenu). В режиме applet
+  доступно около 380 МБ памяти — фреймворк там не запустится.
+- macOS на Apple Silicon. Движок кросс-компилируется под devkitA64, цепочка
+  сборки — bash. Подробности: [`docs/macos-migration.md`](docs/macos-migration.md).
+- ~40 ГБ на диске под checkout движка (`gclient sync`, около 26 ГБ, один раз).
+- [devkitPro](https://devkitpro.org/) в `/opt/devkitpro`, группа `switch-dev`.
+- Flutter SDK **3.41.6** — отдельная копия, системный brew-flutter не годится.
 
-```text
-1. Engine-Checkout (gclient sync, ~26 GB, einmalig)
-2. python3 scripts/patch-engine-horizon.py     # alle Horizon-Patches, idempotent
-3. scripts/gn-gen-horizon.sh                   # GN-Konfiguration horizon/arm64
-4. scripts/build-horizon.sh ...:flutter_engine_static
-5. bash scripts/build-sqlite3.sh               # sqlite3 + Symboltabelle
-6. scripts/build-dart-app.ps1 -Project <dein Flutter-Projekt>
-                                               # Assets via `flutter build bundle`,
-                                               # Kernel, Horizon-Registrant
-7. wsl bash scripts/rebuild-all.sh ui_app      # AOT-Snapshot -> .nro
-8. scripts/nxlink-upload.ps1 -SwitchIp <ip> -Example ui_app
+Подготовка окружения:
+
+```sh
+bash scripts/setup-macos.sh                       # brew-пакеты, depot_tools, Flutter
+sudo scripts/install-devkitpro-macos.sh          # официальный .pkg → dkp-pacman
+source ./env.sh                                   # DEVKITPRO, SRC, FLUTTER_HOME, PATH, …
 ```
 
-Schritte 1–5 sind einmalig (je Engine-Stand). Danach besteht die Iteration
-an einer App aus den Schritten 6–7. `scripts/log-listener.ps1` empfängt das
-Konsolen-Log über TCP (die Konsole verbindet sich zum PC — NAT und Firewall
-stehen so nicht im Weg).
+---
 
-> **Режимы сборки (порт macOS).** Описанная выше цепочка — историческая,
-> Windows/WSL. Актуальная для macOS: те же bash-скрипты с флагом режима —
-> `gn-gen-horizon.sh --mode release|debug`, `build-dart-app.sh --mode
-> release|debug`, `rebuild-all.sh --mode release|debug`; в debug дополнительно
-> поднимается VM-сервис. Обоснование и ограничения — `docs/build-modes-plan.md`.
+## Сборка
 
-### Eigene App mitbringen
+```sh
+# разовые шаги, по одному на обновление движка
+python3 scripts/patch-engine-horizon.py          # патчи, идемпотентно
+bash scripts/gn-gen-horizon.sh                    # GN-конфиг horizon/arm64
+bash scripts/build-horizon.sh ...:flutter_engine_static
+bash scripts/build-sqlite3.sh                    # sqlite3 + таблица символов
 
-```powershell
-scripts/build-dart-app.ps1 -Project C:\pfad\zu\deiner_flutter_app
-wsl bash /mnt/e/flutter-libnx/scripts/rebuild-all.sh ui_app
+# итерация по приложению
+bash scripts/build-dart-app.sh --project examples/romashka_game/dart
+bash scripts/rebuild-all.sh romashka_game        # AOT-снапшот → .nro
+bash scripts/nxlink-upload.sh --switch-ip <ip> --example romashka_game
 ```
 
-Das ist alles — keine Änderung an der App. Assets, Schriften und Manifeste
-kommen aus `flutter build bundle`; die Pakete der App werden über deren
-eigene `package_config.json` aufgelöst. App-Daten liegen unter
-`/switch/flutter_apps/<app-id>/` auf der SD-Karte; zu importierende Dateien
-gehören in den Unterordner `import/` (einen Datei-Browser auf der Konsole
-gibt es noch nicht — die Dateiauswahl bietet den Inhalt dieses Ordners an).
+`scripts/log-listener.sh` принимает лог консоли по TCP — подключается
+консоль, поэтому NAT и брандмауэр не мешают.
 
-### Bekannte Grenzen
+**Режим сборки** задаётся флагом `--mode release|debug`. В release
+собирается `out/horizon_release_arm64`, в debug — `out/horizon_debug_arm64`;
+в debug дополнительно поднимается VM-сервис. Обоснование и ограничения —
+[`docs/build-modes.md`](docs/build-modes.md).
 
-* Software-Rendering erreicht bei Vollbild-Neuzeichnung ~12–15 fps; das
-  GPU-Backend (OpenGL über switch-mesa/nouveau) ist in Arbeit.
-* `flutter_secure_storage` speichert **Klartext** (FAT hat keinen
-  Schlüsselbund) — für Homebrew in Ordnung, nicht für echte Geheimnisse.
-  Im Code dokumentiert.
-* Videowiedergabe und WebView sind vorerst außen vor (Analyse in
-  `docs/target-apps.md`).
-* Eine Auflösung (1280×720); Docked-Skalierung noch nicht umgesetzt.
+---
 
-### Rechtliches
+## Своё приложение
 
-Ein unabhängiges Open-Source-Projekt für **Homebrew-Entwicklung auf eigener
-Hardware**. Es steht in keiner Verbindung zu Nintendo oder Google und wird
-von diesen weder unterstützt noch gebilligt. Nintendo Switch ist eine Marke
-von Nintendo. Nichts an diesem Projekt ermöglicht oder billigt Piraterie.
+```sh
+bash scripts/build-dart-app.sh --project /путь/к/проекту
+bash scripts/rebuild-all.sh <имя_приложения>
+```
 
-Lizenzen: Dieses Repository steht unter MIT (siehe [LICENSE](LICENSE)). Es
-baut gegen die Flutter-Engine (BSD-3-Clause, Patches in `patches/`),
-bündelt die SQLite-Amalgamation (Public Domain) und einen Referenz-Header
-aus Flutter (`third_party/reference/embedder.h`, BSD-3-Clause).
+Приложение править не нужно. Ассеты, шрифты и манифесты приходят из
+`flutter build bundle`; пакеты разрешаются через его собственный
+`package_config.json`. Данные приложения лежат в
+`/switch/flutter_apps/<app-id>/` на карте SD.
+
+---
+
+## Проверка железа без приложения
+
+[`tools/hw_probe`](tools/hw_probe) — маленький NRO без Flutter и Dart,
+который отвечает на два вопроса, в большом приложении неразделимые: выдаёт
+ли `audren` вообще звук и какие биты приходят с консоли.
+
+```sh
+make -C tools/hw_probe
+```
+
+На экране: тон 440 Гц и сырая маска кнопок в шестнадцатеричном виде.
+260 КБ против 50 МБ у приложения, собирается за секунды.
+
+---
+
+## Известные ограничения
+
+- **Debug-`.nro` не линкуется.** Движок в debug собирается целиком, линковка
+  упирается в четыре символа JIT-пути: `basename`,
+  `dart::NativeSymbolResolver::AddSymbols`,
+  `dart::bin::VirtualMemory::*`, `dart::ThreadInterrupter::*`. Первые три
+  закрываются по образцу уже сделанных портов, четвёртый требует решения, а
+  не переноса: Horizon не имеет перенесённых сигналов. Список получен из
+  линкера — [`docs/build-modes.md`](docs/build-modes.md) §6. На release это
+  не влияет.
+- `flutter_secure_storage` хранит **открытым текстом** (в FAT нет связки
+  ключей) — для homebrew приемлемо, для настоящих секретов нет.
+- WebView и видео пока вне объёма (разбор — в
+  [`docs/target-apps.md`](docs/target-apps.md)).
+- Одно разрешение экрана, 1280×720; масштабирование в доке не сделано.
+- В портативном режиме доступна половина кнопок: правый джойкон — это
+  A/B/X/Y и D-Pad, левый — L/ZL/Minus/SL. Pro Controller в доке даёт полный
+  набор, но перечисления игроков пока нет.
+
+---
+
+## Юридическое
+
+Это независимый проект с открытым кодом для **homebrew-разработки на
+принадлежащем вам железе**. Проект не связан с Nintendo и Google, не одобрен
+ими и не поддерживается ими. Nintendo Switch — товарный знак Nintendo. Ни
+одна часть проекта не предназначена для и не одобряет пиратство.
+
+Лицензии: репозиторий — MIT (см. [LICENSE](LICENSE)). Собирается против
+движка Flutter (BSD-3-Clause; патчи в `patches/`), включает amalgamation
+SQLite (public domain), декодер minimp3 (public domain) и таблицу символов
+libmpv (`third_party/mpv/mpv_symbols.inc`).
