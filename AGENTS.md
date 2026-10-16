@@ -12,88 +12,70 @@
 *немодифицированное* Flutter-приложение и получить один `.nro`, который
 запускается на консоли.
 
+Порт **работает**: собрано и запущено на железе приложение
+(`examples/romashka_game`), звук и управление работают.
+
 - Upstream: `https://github.com/miri2577/flutter-libnx` (ветка `master`)
 - Форк (наш): `https://github.com/egorash/flutter-libnx`
-- Рабочая ветка: `master` (дефолтная). Фича-ветки отводятся от `master`, PR создаются внутри форка.
+- Рабочая ветка: `master` (дефолтная)
+- Движок жёстко пиннится к **Flutter 3.41.6**
 
-**Задача этого форка:** сделать build-цепочку полностью нативной на macOS
-(Apple Silicon `arm64`, вторично `x86_64`), переписав PowerShell-скрипты на
-bash/zsh. Оригинальная цепочка рассчитана на **Windows + WSL2 + PowerShell**.
-
-Движок жёстко пиннится к **Flutter 3.41.6**.
+**Ветвление:** фича-ветки отводятся от `master`, PR создаются внутри
+форка. Прямая работа в `master` — только для горячих правок с согласия
+владельца репозитория.
 
 ---
 
-## 2. Ключевые факты, которые нельзя упускать
+## 2. Что нельзя делать
 
-1. **Engine checkout — тяжёлый.** `gclient sync` качает ~26 GB (по README до
-   ~40 GB диска). Это разовая операция.
-2. **`dlopen` на Horizon нет.** FFI-библиотеки (напр. sqlite3) статически
-   линкуются и резолвятся через embedder-hook со сгенерированными таблицами
-   символов.
-3. **Оригинальные `.ps1` не удаляем** — переименовываем в `.ps1.bak`.
-4. **Новые скрипты** — только bash: `set -euo pipefail`, shebang
-   `#!/usr/bin/env bash`, **идемпотентность**.
-5. **devkitPro на macOS** ставится **не через brew** (tap
-   `devkitpro/devkitpro` не существует). Официальный путь — `.pkg`-установщик
-   `devkitpro-pacman-installer.pkg`, затем `dkp-pacman -S switch-dev`.
-   Итог — `/opt/devkitpro`.
-6. **Перед реализацией каждого этапа плана** агент обязан задать пользователю
-   уточняющие вопросы и дождаться ответа. Никаких «молчаливых» широких
-   изменений.
-7. **Фундамент важнее фич.** Сначала инфраструктура эмбеддера (реестр каналов,
-   унифицированный EventChannel-хелпер), улучшение ввода (геймпад/стики/курс),
-   подстановка иконки `.nro`, автоматизация скриптов. См. `docs/infra-plan.md`,
-   `docs/input-icon-plan.md`.
+1. **`dlopen` на Horizon не существует.** FFI-библиотеки (sqlite3, mpv и
+   пр.) статически линкуются и резолвятся через embedder-hook со
+   сгеренными таблицами символов.
+2. **Нельзя хардкодить логику в приложении.** Правки — на стороне порта.
+   Приложение получает черезмерённое поведение, а не подогнанное под
+   конкретный баг.
+3. **Нельзя считать время, не переведя его в единицы счётчика.** Подробнее
+   в §7.
+4. **Нельзя игнорировать возвращаемые значения системных вызовов.** Подробнее
+   в §7.
 
 ---
 
 ## 3. Структура репозитория
 
 ```
-embedder/            C++ embedder: include/ и src/ (engine/, platform/)
-patches/flutter-engine/  Патчи к исходникам Flutter Engine (horizon)
-scripts/             build-скрипты (.sh, .ps1, .py) — ~90 файлов
-examples/            примеры: ui_app, aot_poc, engine_link_test, hello_libnx, thread_probe
-third_party/         sqlite3 (amalgamation), mpv symbols
+embedder/            C++ эмбеддер
+  src/engine/        то, что знает про Engine: плагины, каналы, аудио, ввод
+  src/platform/      то, что знает про консоль: EGL, pad, applet, память
+  include/           контракты между ними
+patches/             патчи к исходникам Flutter Engine (ветка horizon)
+scripts/             сборка: .sh, .py, 109 файлов
+examples/            запускаемые примеры (8 шт.: ui_app, romashka_game, thread_probe, …)
+tools/hw_probe/      измерительный прибор: без Flutter и Dart, 283 КБ
+third_party/         sqlite3 (amalgamation), minimp3 (декодер MP3), символы mpv
 dart_helpers/        вспомогательные Dart-файлы
-docs/                документация (status.md, porting-notes.md, ...)
+docs/                документация, см. §8
 ```
+
+Граница `engine` / `platform` не жёсткая: `engine` может знать про libnx,
+`platform` — про Flutter. Разделение нужно, чтобы примеры без движка
+(`thread_probe`, `tools/hw_probe`) собирались, не подтягивая Engine.
 
 ---
 
-## 4. Целевая build-цепочка (macOS)
-
-```
-1. Engine checkout              gclient sync (~26 GB, один раз)
-2. Патчи движка                 python3 scripts/patch-engine-horizon.py   # идемпотентно
-3. GN-конфиг                    scripts/gn-gen-horizon.sh                 # target_os=horizon, arm64
-4. Сборка движка                scripts/build-horizon.sh ...:flutter_engine_static
-5. sqlite3 + таблица символов   scripts/build-sqlite3.sh
-6. Ассеты + kernel + регистрант scripts/build-dart-app.sh --project <app>  # порт из .ps1
-7. AOT-снапшот → .nro           scripts/rebuild-all.sh ui_app
-8. Заливка на консоль           scripts/nxlink-upload.sh --switch-ip <ip> --example ui_app
-```
-
-Шаги 1–5 — разовые. Итерации по приложению — шаги 6–7.
-`scripts/log-listener.sh` принимает TCP-логи, консоль сама подключается к ПК.
-
----
-
-## 5. Окружение macOS
+## 4. Окружение macOS
 
 - **devkitPro:** `/opt/devkitpro` (devkitA64), группа `switch-dev`.
 - **Flutter SDK:** отдельная копия `~/flutter-3.41.6` (не системный brew-flutter).
 - **depot_tools:** `~/depot_tools`.
-- **Engine checkout:** `~/engine/flutter/engine/src` (ожидание
-  `build-horizon.sh`/`gn-gen-horizon.sh`; переопределяется через `SRC`).
+- **Engine checkout:** `~/engine/flutter/engine/src` (переопределяется
+  через переменную `SRC`).
 - **Переменные окружения** — файл `env.sh` в корне репозитория (системный
   `~/.zshrc` не трогаем):
   ```sh
   source ./env.sh    # DEVKITPRO, DEVKITA64, DEPOT_TOOLS, FLUTTER_HOME, SRC, OUT, JOBS, PATH
   ```
-- **Установка окружения:** `scripts/setup-macos.sh` (brew-пакеты, depot_tools,
-  Flutter; идемпотентный).
+- **Установка окружения:** `scripts/setup-macos.sh` (идемпотентный).
 - **devkitPro (нужен sudo):** `sudo scripts/install-devkitpro-macos.sh`
   (официальный `.pkg` → dkp-pacman → группа `switch-dev`).
 
@@ -108,56 +90,149 @@ python3 --version
 
 ---
 
-## 6. Git и несколько аккаунтов (важно!)
+## 5. Сборка
+
+Полный цикл для приложения:
+
+```sh
+source ./env.sh
+bash scripts/rebuild-all.sh romashka_game     # ассеты, снапшот, .nro
+bash scripts/nxlink-upload.sh --switch-ip 192.168.3.52 --example romashka_game
+```
+
+Шаги сборки движка (`scripts/gn-gen-horizon.sh`, `build-horizon.sh`,
+`build-sqlite3.sh`) выполняются один раз; итерации по приложению — это
+шаги 6–7 выше.
+
+**Режим сборки** задаётся через `--mode release|debug` либо переменную
+`MODE`. Release собирает `out/horizon_release_arm64`, debug —
+`out/horizon_debug_arm64`. Debug-NRO на данный момент не линкуется: не
+хватает четырёх портов, перечисленных в `docs/build-modes.md` §6. Тестировать
+на железе приходится в release.
+
+**Проверка без железа:** `tools/hw_probe` собирается за секунды и отвечает
+на два вопроса, которые в большом приложении неразделимы — выдаёт ли
+`audren` вообще звук и какие биты приходят с консоли. Собрать:
+```sh
+make -C tools/hw_probe
+```
+
+---
+
+## 6. Git
 
 На машине настроены **корпоративные GitLab** (`*.krista.ru`) в глобальном
-`~/.gitconfig` (с кастомными сертификатами). **Не менять глобальный конфиг.**
+`~/.gitconfig` с кастомными сертификатами. **Глобальный конфиг не трогаем.**
 
-- GitHub по **SSH** (`~/.ssh/id_rsa`) аутентифицируется как **egorash**.
-- GitHub по **HTTPS** (keychain, пользователь `24220268` = `egorash`) — токен
-  со scopes `repo`, `workflow`, `read:user`, `user:email`.
+- GitHub по **SSH** (`~/.ssh/id_rsa`) аутентифицируется как `egorash`.
+- GitHub по **HTTPS** (keychain, пользователь `24220268` = `egorash`).
 - **remotes этого репозитория делаем по SSH:**
   ```
   origin   git@github.com:egorash/flutter-libnx.git
   upstream git@github.com:miri2577/flutter-libnx.git
   ```
-- `user.name` / `user.email` задаём **локально** (`git config --local`), чтобы
-  не путать с корпоративной идентичностью.
-- Секреты и токены в коммиты не попадают. Engine checkout и артефакты сборки —
-  в `.gitignore`.
+- `user.name` / `user.email` задаются **локально** (`git config --local`),
+  чтобы не путать с корпоративной идентичностью.
+- Секреты и токены в коммиты не попадают. Engine checkout и артефакты
+  сборки — в `.gitignore`.
+
+**Переписывание истории** (`rebase`, `reset --hard`, `push --force`)
+делается только с `--force-with-lease` и только по явной договорённости.
 
 ---
 
 ## 7. Соглашения
 
-- **Коммиты (Conventional Commits):** `feat(macos):`, `fix(macos):`,
-  `docs(macos):`, `chore(macos):`, `refactor(macos):`.
-- **Язык — русский, всегда.** Все **новые** комментарии (в C++, Dart, скриптах)
-  и вся документация пишутся **строго по-русски**. Правя существующий файл,
-  заодно проверяй язык текста в нём: то, что ты добавляешь или меняешь,
-  переводи на русский (соседние нетронутые строки ради этого переписывать не
-  нужно). Историческую англо/немецкую документацию upstream «оптом» не
-  переводим, но любой новый текст — по-русски.
-- **Скрипты:** shellcheck без `severity=error`, никаких Linux-специфичных путей
-  (`/mnt/...`, `/usr/bin/python3`), различать синтаксис `nc` и `sed` между
-  macOS и Linux.
-- Любое изменение контракта скрипта (флаги/аргументы) отражать в
-  `docs/macos-migration.md` и README.
+### Язык
+
+**Весь новый текст — по-русски:** комментарии в коде, документация, вывод
+скриптов, **сообщения коммитов**.
+
+Правя существующий файл, заодно переводи то, что меняешь; соседние
+нетронутые строки ради этого переписывать не нужно. Историческую
+англо-немецкую документацию upstream оптом не переводим (§8).
+
+*Расхождение, которого не было вовремя замечено:* репозиторий исторически
+пишет коммиты по-немецки. Следовать нужно этому правилу, а не
+сложившемуся обычаю.
+
+### Коммиты
+
+Conventional Commits с префиксом области:
+
+```
+feat(macos):    fix(macos):    docs(macos):
+refactor(macos):    chore(macos):
+```
+
+Область — не всегда `macos`: для плагинов уместнее `audio`, `gamepad`,
+`scripts`.
+
+### Скрипты
+
+- shellcheck без `severity=error`
+- никаких Linux-специфичных путей (`/mnt/...`, `/usr/bin/python3`)
+- различать синтаксис `nc` и `sed` между macOS и Linux
+- идемпотентность, `set -euo pipefail`, shebang `#!/usr/bin/env bash`
+
+### Время в коде
+
+`armGetSystemTick()` возвращает **тики** (`cntpct_el0`), а не наносекунды.
+Частота на Horizon — 19,2 МГц, один тик = 52 нс. Делить на `1'000'000` и
+получать миллисекунды нельзя: ошибка занижения в 52 раза дважды породила
+ложные выводы.
+
+Внутри кода — **только тики**, через `embedder/include/flutter_libnx/tick_clock.h`.
+Наносекунды остаются исключительно там, где их требует ядро (таймауты
+`waitSingleHandle`, `svcWaitSynchronization`).
+
+### Диагностика
+
+Три правила, каждое из которых дорого обошлось:
+
+1. **Проверять возвращаемые значения.** `audrvVoiceAddWaveBuf` возвращает
+   `bool` и отказывает молча; `audrvVoiceInit` отказывает при нехватке
+   каналов.
+2. **Выводить фактические счётчики, а не только факт «работает».** Пять
+   раундов правок звука ничего не прояснили, пока в протокол не попали
+   числа: `abgespielt 0` при живых данных указало на отсутствие выхода к
+   устройству, а счётчик наших отсчётов, совпавший с числом входных, — на
+   потерю 8,1 % сигнала в ресемплинге.
+3. **Ставить время в протокол.** Без метки времени нельзя отличить «цикл
+   крутится» от «цикл встал после трёх тактов».
+
+Отладочная трассировка микшера включается флагом сборки
+`-DFLUTTER_LIBNX_AUDIO_TRACE=1`, по умолчанию выключена.
 
 ---
 
 ## 8. Документы
 
-| Файл | Назначение |
+Полная инвентаризация с категориями и планом работ —
+[`docs/documentation-plan.md`](docs/documentation-plan.md). Ниже то, к чему
+полезно идти по имени.
+
+| Файл | О чём |
 |---|---|
-| `docs/0_init.md` | Исходный план (исторический, содержит неточности) |
-| `docs/macos-plan.md` | Актуальный поэтапный план работ |
-| `docs/macos-migration.md` | Аудит всех скриптов (создаётся на этапе 1) |
-| `docs/status.md`, `docs/porting-notes.md` | Инженерный журнал upstream |
+| `docs/infra.md` | устройство эмбеддера: каналы, реестр, EventChannel |
+| `docs/build-modes.md` | режимы сборки, известные проблемы debug-сборки |
+| `docs/macos-migration.md` | аудит скриптов: что переведено на bash, что нет |
+| `docs/plugin-plan-audio-gamepad.md` | план плагинов звука и геймпада |
+| `docs/journal-audio-gamepad.md` | 21 разбор: что ломалось, почему, чем подтверждено |
+| `docs/perf-notes.md` | измеренные величины по производительности |
+| `docs/horizon-tls-roots.md` | TLS на Horizon: корни и найденные предпосылки |
+| `docs/hardware-target.md` | измерения на реальном железе |
+| `docs/porting-notes.md` | инженерный журнал мелента 0 (2436 строк, не переводится) |
+| `docs/work-status.md` | текущий статус и открытые задачи |
+
+**Читать перед любой работой со звуком или вводом:**
+`docs/journal-audio-gamepad.md` — там собраны выводы о методе, которые
+иначе пришлось бы выводить заново.
 
 ---
 
-## 9. Текущий статус macOS-порта
+## 9. Журнал доработок
 
-Прогресс ведётся в `docs/macos-plan.md` (чеклисты этапов). На момент создания
-этого файла выполнено: только постановка задачи и планирование.
+- `git log --oneline` — история порта.
+- `docs/journal-audio-gamepad.md` — что ломалось в звуке и геймпаде.
+- `docs/porting-notes.md` — инженерный журнал восходящего мелента.
