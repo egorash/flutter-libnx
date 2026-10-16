@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "flutter_libnx/log.h"
+#include "flutter_libnx/tick_clock.h"
 
 namespace flutter_libnx {
 namespace {
@@ -32,7 +33,13 @@ constexpr int kPollHz = 60;
 constexpr int kStickMax = 32767;
 // Ось-шляпа для D-Pad: крайние значения плюс ноль в покое.
 constexpr int kDpadMax = 32767;
-constexpr int64_t kPollPeriodNanos = 1000000000 / kPollHz;
+// Период опроса - в ТИКАХ. Раньше здесь стояло «1000000000 / kPollHz» и
+// сравнивалось с armGetSystemTick(), который отдаёт тики, а не наносекунды:
+// фактически выходило 16'666'666 / 19'200'000 = 0,868 секунды между опросами
+// вместо 1/60. Кнопка, нажатая короче окна, просто терялась - отсюда
+// «работает только кнопочный шторм» и «надо подгадывать момент».
+constexpr int kPollPeriodMs = 1000 / kPollHz;
+const u64 kPollPeriodTicks = flutter_libnx::UsToTick(1000000 / kPollHz);
 
 // Таблица кнопок libnx -> ключ LinuxMapping (controller_database.dart:141).
 // Порядок Xbox, поэтому A=0, B=1, X=2, Y=3.
@@ -52,19 +59,20 @@ constexpr ButtonEntry kButtons[] = {
     {HidNpadButton_StickL, "9"}, {HidNpadButton_StickR, "10"},
 };
 
-// Прошлое состояние по ключу: 0 - было, 1 - было нажато/ненулевое.
-std::string& LastButton(const std::string& key) {
-  static std::vector<std::pair<std::string, double>> state;
-  for (auto& entry : state) {
-    if (entry.first == key) {
-      return entry.first;
-    }
-  }
-  state.emplace_back(key, 0.0);
-  return state.back().first;
-}
-
-double LastValue(const std::string& key) {
+// Прошлое состояние - ДВЕ таблицы, а не одна.
+//
+// Ключи у кнопок и у осей пересекаются! Кнопки шлют "0".."10", оси тоже
+// "0".."7". При общей таблице отклонение стика записывало в ячейку "0"
+// значение 32367, после чего проверка кнопки A читала LastValue("0") != 0 и
+// считала, что A нажата. Дальше части порта перетирали состояние друг друга:
+//
+//   * отпускание стика не отправлялось - SendAxis сравнивал ноль с нулём
+//     (состояние кнопки), и игра вечно видела отклонённый стик;
+//   * движение стиком приравнивалось к нажатию A, то есть к прыжку;
+//   * нажатие A обнуляло ячейку "0" и стик замирал.
+//
+// Оси и кнопки - разные пространства имён, и хранить их надо раздельно.
+double& LastButtonValue(const std::string& key) {
   static std::vector<std::pair<std::string, double>> state;
   for (auto& entry : state) {
     if (entry.first == key) {
@@ -75,15 +83,15 @@ double LastValue(const std::string& key) {
   return state.back().second;
 }
 
-void Remember(const std::string& key, double value) {
+double& LastAxisValue(const std::string& key) {
   static std::vector<std::pair<std::string, double>> state;
   for (auto& entry : state) {
     if (entry.first == key) {
-      entry.second = value;
-      return;
+      return entry.second;
     }
   }
-  state.emplace_back(key, value);
+  state.emplace_back(key, 0.0);
+  return state.back().second;
 }
 
 // Порог, ниже которого ось считается покоящейся: иначе дребезг аналогового
@@ -101,8 +109,11 @@ class Gamepad {
     if (running_.load()) {
       return true;
     }
-    padInitializeDefault(&pad_);
+    // Порядок как во всех примерах libnx: сначала настроить набор стилей,
+    // потом снять идентификаторы. Обратный порядок не даёт стилей массы -
+    // и после него не приходило ни одного события.
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+    padInitializeDefault(&pad_);
 
     // Идентификатор для listGamepads. Плагин считает его непрозрачной строкой
     // (GamepadController.parse читает id как String), поэтому подойдёт любая
@@ -184,7 +195,7 @@ class Gamepad {
       }
     }
     std::lock_guard<std::mutex> guard(mutex_);
-    rumble_until_ns_ = 0;
+    rumble_until_ticks_ = 0;
   }
 
   bool PopEvent(PadEvent* event) {
@@ -201,9 +212,16 @@ class Gamepad {
   static constexpr int kVibrationHandles = 2;
   static constexpr HidVibrationValue kStill_ = {};
 
+  // Setzt den ABSOLUTEN Zeitpunkt, zu dem die Vibration endet. Vorher stand
+  // hier die Dauer, die dann mit dem aktuellen Zaehler verglichen wurde - der
+  // Vergleich war also fast immer wahr und die Vibration endete sofort.
   void StopRumbleAfter(int duration_ms) {
     std::lock_guard<std::mutex> guard(mutex_);
-    rumble_until_ns_ = duration_ms > 0 ? duration_ms * 1000000LL : 0;
+    rumble_until_ticks_ =
+        duration_ms > 0
+            ? flutter_libnx::TickNow() + flutter_libnx::UsToTick(
+                                     static_cast<u64>(duration_ms) * 1000)
+            : 0;
   }
 
   void Push(const PadEvent& event) {
@@ -216,22 +234,34 @@ class Gamepad {
     u64 next_poll = 0;
 
     while (!stop_.load()) {
-      // armGetSystemTick zaehlt in Nanosekunden seit Start - direkt als
-      // Zeitbasis brauchbar, ohne Umrechnung.
-      const u64 now = armGetSystemTick();
+      // armGetSystemTick zaehlt in Ticks seit Boot. Als Zeitbasis brauchbar,
+      // aber nur mit Umrechnung - siehe tick_clock.h.
+      const u64 now = flutter_libnx::TickNow();
       if (now >= next_poll) {
-        next_poll = now + kPollPeriodNanos;
+        next_poll = now + kPollPeriodTicks;
         padUpdate(&pad_);
 
-        const u64 active = pad_.active_id_mask & 0xFF;
-        if (active != 0) {
+        // Aus pad.c von libnx: padInitializeWithMask schreibt
+        // pad->id_mask = mask & 0xff - das sind ausschliesslich die Spieler
+        // No1..No8. Die eingebauten Joy-Con im Handheld-Betrieb laufen ueber
+        // ein eigenes Feld (read_handheld/active_handheld), nicht ueber
+        // active_id_mask. Genau daher blieb active_id_mask null, waehrend der
+        // Controller vorhanden war: keine Ereignisse, keine Anzeige.
+        const bool connected = pad_.active_id_mask != 0 || pad_.active_handheld;
+        if (connected) {
           if (!announced) {
             announced = true;
             PadEvent event;
             event.connection = true;
             event.connected = true;
             Push(event);
-            LOG_INFO("Gamepad: Controller erkannt");
+            // Welche Quelle aktiv ist, entscheidet vieles: die eingebauten
+            // Joy-Con melden sich ueber active_handheld, ein Controller im
+            // Dock ueber active_id_mask.
+            LOG_INFO("Gamepad: Controller erkannt (Handheld=%d, Spieler-Maske "
+                     "0x%02x, Stil 0x%08x)",
+                     pad_.active_handheld ? 1 : 0, pad_.active_id_mask,
+                     pad_.style_set);
           }
           PollState();
         } else if (announced) {
@@ -243,7 +273,7 @@ class Gamepad {
           LOG_INFO("Gamepad: Controller verschwunden");
         }
 
-        if (rumble_until_ns_ > 0 && now >= rumble_until_ns_) {
+        if (rumble_until_ticks_ > 0 && now >= rumble_until_ticks_) {
           StopRumble();
         }
       }
@@ -256,8 +286,8 @@ class Gamepad {
     const u64 buttons = pad_.buttons_cur;
     for (const ButtonEntry& entry : kButtons) {
       const double value = (buttons & entry.mask) ? 1.0 : 0.0;
-      if (std::fabs(LastValue(entry.key) - value) > 0.0) {
-        Remember(entry.key, value);
+      if (LastButtonValue(entry.key) != value) {
+        LastButtonValue(entry.key) = value;
         PadEvent event;
         event.analog = false;
         event.key = entry.key;
@@ -308,14 +338,19 @@ class Gamepad {
 
   void SendAxis(const char* key, double value) {
     const std::string name(key);
-    const double previous = LastValue(name);
-    if (std::fabs(previous - value) <= kAxisEpsilon && value != 0.0) {
-      return;
+    double& remembered = LastAxisValue(name);
+    const double previous = remembered;
+    // Значение в зоне покоя приводим к нулю. Иначе стик, который физически
+    // вернулся в центр, продолжает числиться отклонённым: SendAxis ниже
+    // отбрасывает такие значения молча, и последнее отправленное - 32367 -
+    // остаётся в игре навсегда. Обнуление делает состояние настоящим.
+    if (std::fabs(value) <= kAxisEpsilon) {
+      value = 0.0;
     }
     if (previous == value) {
       return;
     }
-    Remember(name, value);
+    remembered = value;
     PadEvent event;
     event.analog = true;
     event.key = name;
@@ -335,7 +370,7 @@ class Gamepad {
 
   std::mutex mutex_;
   std::deque<PadEvent> events_;
-  int64_t rumble_until_ns_ = 0;
+  u64 rumble_until_ticks_ = 0;
 };
 
 }  // namespace

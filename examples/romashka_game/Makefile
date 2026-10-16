@@ -49,14 +49,34 @@ CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 # Quelltext zu stehen - jede App bekommt so automatisch ihr eigenes.
 CFLAGS	+=	-DFLUTTER_LIBNX_APP_ID=\"$(TARGET)\"
 
-# Das Pad spricht NICHT mehr ueber die Tastatur mit dem Framework, sondern
-# ausschliesslich ueber das Plugin gamepads. Grund sind zwei Zustandsquellen
-# fuer dieselben Pfeiltasten: die Spielelogik gewichtet sie als Prioritaet,
-# nicht als Zusammenfuehrung (InputController._recompute). Verliert einer
-# der Wege das Loslassen, bleibt die Figur seitwaerts stehen.
-# Bei 1 (Vorgabe im Embedder) bleibt die Tastaturweiterleitung erhalten -
-# fuer Apps ohne Gamepad-Plugin ist sie die einzige Eingabequelle.
-CFLAGS	+=	-DFLUTTER_LIBNX_PAD_KEYBOARD=0
+# Der Pad spricht weiterhin ueber das Plugin gamepads (Rumble, analoge
+# Achsen) - der Tastaturweg bleibt aber AN. Grund ist eine Eigenschaft des
+# Pakets gamepads, die wir nicht umgehen koennen:
+#
+#   LinuxMapping.normalizeDpadAxis liefert bei jedem D-Pad-Ereignis BEIDE
+#   Tasten zurueck, auch die nicht gedrueckte:
+#       [dpadLeft: value < 0 ? 1 : 0, dpadRight: value > 0 ? 1 : 0]
+#
+#   Die Spielelogik schreibt beide nacheinander in DENSELBE Variable:
+#       case dpadLeft:  setPadDpad(pressed ? -1 : 0);
+#       case dpadRight: setPadDpad(pressed ?  1 : 0);
+#
+#   Nach "links" bleibt damit immer 0 stehen - das Ereignis hebt sich selbst
+#   auf. Nach "rechts" gewinnt das zweite, weil es zuletzt kommt. Ueber die
+#   Tastatur kommen dagegen echte, getrennte Tastenereignisse (Pfeiltasten),
+#   und damit war vor dem Abschalten alles bedienbar.
+#
+# Im Standard-Mapping gibt es keine Tastenschluessel fuer das D-Pad, und
+# normalizeDpadAxis ist bei Tastenereignissen nur fuer einen Schluessel
+# erreichbar, der in der Tastentabelle fehlt - "6" und "7" stehen dort aber
+# als back/start. Der Weg ueber das Plugin ist fuer das Steuerkreuz also
+# nicht zu retten; die Tastatur ist der einzige Weg.
+#
+# Frueher stand hier FLUTTER_LIBNX_PAD_KEYBOARD=0. Der damalige Grund war
+# ein Fehler im Geraet: LastValue und Remember hielten zwei getrennte Listen,
+# deshalb ging das Loslassen nie raus und die Figur blieb stehen. Der ist
+# behoben (eine gemeinsame Tabelle), die Sperre damit gegenstandslos.
+CFLAGS	+= -DFLUTTER_LIBNX_PAD_KEYBOARD=1
 
 #---------------------------------------------------------------------------------
 # Fuer Horizon gebaute Flutter Engine.

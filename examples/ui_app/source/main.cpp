@@ -1151,12 +1151,18 @@ int main(int argc, char* argv[]) {
   // ist immer im Vordergrund – die Meldung bleibt also einmalig gültig.
   bool focus_sent = false;
 
-  LOG_INFO("Hauptschleife laeuft, Plus beendet");
+  // Beendet wird ueber HOME, und das macht die Konsole selbst:
+  // appletMainLoop() liefert false, sobald das Betriebssystem das Beenden
+  // anfordert. HOME erreicht den Prozess nie - fuer HidNpadButton_Home gibt
+  // es in libnx keine Konstante, die Taste faengt das System ab.
+  //
+  // Ein eigener Ausgang ueber Plus war daher nur schaedlich: Plus ist eine
+  // ganz normale Taste, sie kommt als 0x00000400 an (hw_probe), und romashka
+  // haengt an GamepadButton.start - also an Plus - die Pause. Die App ist
+  // damit beim ersten Druck auf Pause beendet worden.
+  LOG_INFO("Hauptschleife laeuft, HOME beendet");
   while (appletMainLoop()) {
     platform.PollEvents();
-    if (padGetButtonsDown(&platform.pad()) & HidNpadButton_Plus) {
-      break;
-    }
     SendTouchEvents(engine, platform);
     const u64 cursor_claimed = UpdateVirtualCursor(engine, platform);
     SendKeyEvents(engine, platform, cursor_claimed);

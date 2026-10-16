@@ -12,6 +12,7 @@
 //
 // Смысл числовых ключей и инверсия оси Y объяснены в gamepad_horizon.h.
 #include <chrono>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -162,9 +163,11 @@ void flutter_libnx_gamepads_pump(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
   using namespace flutter_libnx;
 
   // Первые события пишем подробно, дальше - счётчиком раз в пять секунд.
-  // Подробный лог на каждое движение оси забил бы файл и ничего бы не
-  // добавил: событий там единицы на нажатие.
-  static int g_logged = 0;
+  // Лимит ставим на КАЖДЫЙ ключ, а не на весь прогон: общий лимит в сорок
+  // событий съедал первые же секунды, после чего не видно было ни
+  // отпускания кнопок, ни D-Pad - то есть ровно той части, где всё и ломалось.
+  constexpr int kLogPerKey = 6;
+  static std::map<std::string, int> g_logged_per_key;
   static int64_t g_summary_at = 0;
   static int g_buttons = 0;
   static int g_axes = 0;
@@ -197,8 +200,9 @@ void flutter_libnx_gamepads_pump(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
     } else {
       g_buttons++;
     }
-    if (g_logged < 40) {
-      g_logged++;
+    auto& logged = g_logged_per_key[event.key];
+    if (logged < kLogPerKey) {
+      logged++;
       LOG_INFO("gamepads: %s key=%s value=%.0f",
                event.analog ? "Achse" : "Taste", event.key.c_str(), event.value);
     }
