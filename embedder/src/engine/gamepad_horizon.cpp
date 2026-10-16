@@ -120,6 +120,8 @@ class Gamepad {
     stop_.store(false);
     running_.store(true);
     thread_ = std::thread([this] { PollLoop(); });
+    LOG_INFO("Gamepad: Abfrage laeuft, 60 Hz, Rumble=%s",
+             rumble_ok_ ? "ja" : "nein");
     return true;
   }
 

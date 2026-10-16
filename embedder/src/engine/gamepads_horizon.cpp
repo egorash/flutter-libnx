@@ -103,6 +103,8 @@ bool flutter_libnx_gamepads_handle(
 
   if (method == "listGamepads") {
     const std::string id = flutter_libnx_gamepad_id();
+    LOG_INFO("gamepads: listGamepads -> %s",
+             id.empty() ? "kein Controller" : id.c_str());
     if (id.empty()) {
       // Пустой список - честный ответ: контроллера нет.
       Respond(engine, message, StdValue::List());
@@ -159,6 +161,14 @@ bool flutter_libnx_gamepads_handle(
 void flutter_libnx_gamepads_pump(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
   using namespace flutter_libnx;
 
+  // Первые события пишем подробно, дальше - счётчиком раз в пять секунд.
+  // Подробный лог на каждое движение оси забил бы файл и ничего бы не
+  // добавил: событий там единицы на нажатие.
+  static int g_logged = 0;
+  static int64_t g_summary_at = 0;
+  static int g_buttons = 0;
+  static int g_axes = 0;
+
   flutter_libnx::PadEvent event;
   while (flutter_libnx_gamepad_pop_event(&event)) {
     const std::string id = flutter_libnx_gamepad_id();
@@ -176,8 +186,21 @@ void flutter_libnx_gamepads_pump(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
       payload.as_map.emplace_back(
           StdValue::String("type"),
           StdValue::String(event.connected ? "connected" : "disconnected"));
+      LOG_INFO("gamepads: %s",
+               event.connected ? "Controller verbunden" : "Controller getrennt");
       Invoke(engine, "onGamepadConnectionEvent", payload);
       continue;
+    }
+
+    if (event.analog) {
+      g_axes++;
+    } else {
+      g_buttons++;
+    }
+    if (g_logged < 40) {
+      g_logged++;
+      LOG_INFO("gamepads: %s key=%s value=%.0f",
+               event.analog ? "Achse" : "Taste", event.key.c_str(), event.value);
     }
 
     payload.as_map.emplace_back(StdValue::String("time"),
@@ -192,6 +215,13 @@ void flutter_libnx_gamepads_pump(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
     payload.as_map.emplace_back(StdValue::String("vendorId"), StdValue::Null());
     payload.as_map.emplace_back(StdValue::String("productId"), StdValue::Null());
     Invoke(engine, "onGamepadEvent", payload);
+  }
+
+  const int64_t now = NowMillis();
+  if (g_buttons + g_axes > 0 && now >= g_summary_at) {
+    g_summary_at = now + 5000;
+    LOG_INFO("gamepads: bisher %d Tasten und %d Achsenbewegungen gesendet",
+             g_buttons, g_axes);
   }
 }
 

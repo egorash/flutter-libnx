@@ -45,6 +45,51 @@ std::map<std::string, int>& Players() {
   return players;
 }
 
+// Порядок создания игроков. Нужен для выбора жертвы при нехватке голосов:
+// std::map упорядочен по UUID, то есть случайно, а жертвой должен стать
+// самый старый.
+std::vector<std::string>& PlayerOrder() {
+  static std::vector<std::string> order;
+  return order;
+}
+
+std::mutex& TableMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+// Выдаёт голос. Если свободных нет, отказывается на игрока, который дольше
+// всех играет: его звук прерывается, но приложение продолжает жить.
+//
+// Раньше здесь возвращался -1, и каждый отказ бросал в Dart
+// PlatformException. На практике это убивало игру на старте: пулы создаются
+// по потребности и растут сверх заявленного размера (в audio_service.dart
+// сказано прямо: "число - это не предел, а сколько плееров остаётся в
+// покое"), так что 32 голоса в пиковую нагрузку заканчиваются.
+int AllocateVoice() {
+  int voice = flutter_libnx_audio_create_player();
+  if (voice >= 0) {
+    return voice;
+  }
+
+  std::lock_guard<std::mutex> guard(TableMutex());
+  if (PlayerOrder().empty()) {
+    return -1;
+  }
+  const std::string victim = PlayerOrder().front();
+  const auto it = Players().find(victim);
+  if (it == Players().end()) {
+    return -1;
+  }
+  const int freed = it->second;
+  LOG_WARN("audioplayers: keine freie Stimme - nehme %s (Stimme %d)",
+           victim.c_str(), freed);
+  Players().erase(it);
+  PlayerOrder().erase(PlayerOrder().begin());
+  flutter_libnx_audio_release_player(freed);
+  return flutter_libnx_audio_create_player();
+}
+
 std::map<int, EventChannel>& Streams() {
   static std::map<int, EventChannel> streams;
   return streams;
@@ -55,11 +100,6 @@ std::map<int, EventChannel>& Streams() {
 std::map<int, bool>& PendingPrepared() {
   static std::map<int, bool> pending;
   return pending;
-}
-
-std::mutex& TableMutex() {
-  static std::mutex mutex;
-  return mutex;
 }
 
 void Respond(FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -194,13 +234,14 @@ bool flutter_libnx_audioplayers_handle(
   const std::string player = PlayerKey(args);
 
   if (method == "create") {
-    const int voice = flutter_libnx_audio_create_player();
+    const int voice = AllocateVoice();
     if (voice < 0) {
       RespondError(engine, message, "no_voices", "keine freie Audio-Stimme");
       return true;
     }
     std::lock_guard<std::mutex> guard(TableMutex());
     Players()[player] = voice;
+    PlayerOrder().push_back(player);
     LOG_INFO("audioplayers: Player %s -> Stimme %d", player.c_str(), voice);
     Respond(engine, message, StdValue::Null());
     return true;
@@ -227,6 +268,13 @@ bool flutter_libnx_audioplayers_handle(
     std::lock_guard<std::mutex> guard(TableMutex());
     Players().erase(player);
     Streams().erase(voice);
+    auto& order = PlayerOrder();
+    for (auto it = order.begin(); it != order.end(); ++it) {
+      if (*it == player) {
+        order.erase(it);
+        break;
+      }
+    }
     Respond(engine, message, StdValue::Null());
     return true;
   }
