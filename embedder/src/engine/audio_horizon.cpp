@@ -58,19 +58,15 @@ constexpr int kOutputChannels = 2;
 // Игра держит до 31 плеера одновременно (audio_service.dart: сумма пулов 30
 // плюс bgm), плюс запас на загрузку файла до воспроизведения.
 constexpr int kMaxVoices = 32;
-// Трассировка микшера. По умолчанию выключена: она нужна ровно тогда,
-// когда звук не слышен, и больше только засоряет протокол. Включается при
-// сборке: make CFLAGS_EXTRA+=-DFLUTTER_LIBNX_AUDIO_TRACE=1
+// Трассировка микшера (FLUTTER_LIBNX_AUDIO_TRACE) выключена по умолчанию:
+// она нужна ровно тогда, когда звук не слышен, и больше только засоряет
+// протокол. Полностью выбрасывать её нельзя - именно эти строки показали,
+// что при fehlender Senke der Dienst null Abtastwerte ausgibt, obwohl die
+// Daten ankommen, und dass das Reseampeln 8,1 % verliert.
 //
-// Не выбрасывать совсем нельзя - именно эти строки показали, что при
-// fehlender Senke der Dienst null Abtastwerte ausgibt, obwohl die Daten
-// ankommen, und dass das Reseampeln 8,1 % verliert.
-#ifdef FLUTTER_LIBNX_AUDIO_TRACE
-constexpr bool kTrace = true;
-#else
-constexpr bool kTrace = false;
-#endif
-
+// Блоки ниже помечены #ifdef, а не if constexpr: поля счётчиков тоже под
+// #ifdef, а if constexpr компилятор отбрасывает лишь после разбора имён -
+// он не смог бы даже собрать обращение к несуществующему полю.
 constexpr int kSlotsPerVoice = 4;
 constexpr int kSrcRate = 44100;
 // Кадр рендерера при 48 кГц - AUDREN_SAMPLES_PER_FRAME_48KHZ отсчётов, и
@@ -131,14 +127,19 @@ struct Voice {
   int resample_carry160 = 0;
 
   int64_t out_samples = 0;
-  // Сколько порций уже показали в лог: три с первых по каждому голосу
+  // Уже отправлено ли audio.onComplete для этого голоса.
+  bool reported_done = false;
+
+#ifdef FLUTTER_LIBNX_AUDIO_TRACE
+  // Нужны только трассировке, поэтому в обычной сборке их нет вовсе: не
+  // место платить за них памятью на 32 голоса.
+  // Сколько порций уже показали в лог: трёх с первых по каждому голосу
   // хватает, чтобы отличить "декодер идёт" от "декодер молчит".
   int log_slots = 0;
   // Состояние последней сводки: сколько отсчётов сервис уже отдал.
   u32 last_played = 0;
   bool reported = false;
-  // Уже отправлено ли audio.onComplete для этого голоса.
-  bool reported_done = false;
+#endif
 };
 
 class AudioEngine {
@@ -288,10 +289,12 @@ class AudioEngine {
         voice.mono_tail.clear();
         // Голос берётся из пула повторно, поэтому и счётчики для протокола
         // надо сбросить - иначе сводка по нему больше не появится.
+        voice.reported_done = false;
+#ifdef FLUTTER_LIBNX_AUDIO_TRACE
         voice.log_slots = 0;
         voice.last_played = 0;
         voice.reported = false;
-        voice.reported_done = false;
+#endif
         return i;
       }
     }
@@ -427,7 +430,8 @@ class AudioEngine {
       // Wie viele Abtastwerte der Dienst wirklich ausgegeben hat. Ohne
       // diese Zeile ist "kein Ton" von "Daten kommen an" nicht zu
       // unterscheiden - genau diese Verwechslung hat fuenf Runden gekostet.
-      if constexpr (kTrace) {
+#ifdef FLUTTER_LIBNX_AUDIO_TRACE
+      {
         if (now >= next_drops_report) {
           next_drops_report = now + flutter_libnx::UsToTick(1000000);
           for (int i = 0; i < kMaxVoices; ++i) {
@@ -456,6 +460,7 @@ class AudioEngine {
           }
         }
       }
+#endif
     }
 
     for (int i = 0; i < kMaxVoices; ++i) {
@@ -631,7 +636,8 @@ class AudioEngine {
                      static_cast<size_t>(written) * voice.channels *
                          sizeof(int16_t));
       voice.out_samples += written;
-      if constexpr (kTrace) {
+#ifdef FLUTTER_LIBNX_AUDIO_TRACE
+      {
         if (voice.log_slots < 3) {
           voice.log_slots++;
           // Размах данных в слоте. Ноль означал бы, что виноват декодер или
@@ -648,6 +654,7 @@ class AudioEngine {
                    id, written, s, peak);
         }
       }
+#endif
       buf.start_sample_offset = s * kSlotOutSamples;
       buf.end_sample_offset = buf.start_sample_offset + written;
       if (!audrvVoiceAddWaveBuf(&driver_, id, &buf)) {
