@@ -104,6 +104,12 @@ class Gamepad {
     padInitializeDefault(&pad_);
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
 
+    // Идентификатор для listGamepads. Плагин считает его непрозрачной строкой
+    // (GamepadController.parse читает id как String), поэтому подойдёт любая
+    // устойчивая. Раньше это поле просто не заполнялось - и listGamepads
+    // всегда отвечал "kein Controller", а откачка событий всё отбрасывала.
+    id_ = "horizon-pad-" + std::to_string(static_cast<int>(npad_id_));
+
     // Вибрация: отдельные дескрипторы устройств. Стиль - FullKey, это
     // Pro Controller (обычная пара Джойконов в доке).
     Result res = hidInitializeVibrationDevices(handles_, kVibrationHandles,

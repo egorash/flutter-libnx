@@ -272,6 +272,12 @@ class AudioEngine {
     return static_cast<long>(voice.decoder.detected_samples * 1000 / rate);
   }
 
+  bool VoiceIdle(int id) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    const Voice& voice = voices_[id];
+    return !voice.used || !voice.open || voice.finished;
+  }
+
   bool PopEvent(AudioEvent* event) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (events_.empty()) {
@@ -613,6 +619,10 @@ long flutter_libnx_audio_position_ms(int id) {
 
 long flutter_libnx_audio_duration_ms(int id) {
   return flutter_libnx::AudioEngine::Instance().DurationMs(id);
+}
+
+bool flutter_libnx_audio_voice_idle(int id) {
+  return flutter_libnx::AudioEngine::Instance().VoiceIdle(id);
 }
 
 bool flutter_libnx_audio_pop_event(int* id, bool* prepared) {

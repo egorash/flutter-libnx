@@ -76,16 +76,37 @@ int AllocateVoice() {
   if (PlayerOrder().empty()) {
     return -1;
   }
-  const std::string victim = PlayerOrder().front();
-  const auto it = Players().find(victim);
+
+  // Сначала ищем жертву среди доигравших: оборвать уже закончивший звук
+  // не слышно. Только если таких нет - берём самого старого, он звучит
+  // дольше всех и теряет своё место первым.
+  const std::string* victim = nullptr;
+  for (const std::string& candidate : PlayerOrder()) {
+    const auto it = Players().find(candidate);
+    if (it != Players().end() && flutter_libnx_audio_voice_idle(it->second)) {
+      victim = &candidate;
+      break;
+    }
+  }
+  if (victim == nullptr) {
+    victim = &PlayerOrder().front();
+  }
+
+  const auto it = Players().find(*victim);
   if (it == Players().end()) {
     return -1;
   }
   const int freed = it->second;
   LOG_WARN("audioplayers: keine freie Stimme - nehme %s (Stimme %d)",
-           victim.c_str(), freed);
+           victim->c_str(), freed);
   Players().erase(it);
-  PlayerOrder().erase(PlayerOrder().begin());
+  auto& order = PlayerOrder();
+  for (auto pos = order.begin(); pos != order.end(); ++pos) {
+    if (*pos == *victim) {
+      order.erase(pos);
+      break;
+    }
+  }
   flutter_libnx_audio_release_player(freed);
   return flutter_libnx_audio_create_player();
 }
@@ -191,6 +212,15 @@ int VoiceOf(const std::string& player) {
   return it == Players().end() ? -1 : it->second;
 }
 
+// Ответ для игрока без голоса. Позиция и длительность - ноль, остальное -
+// пустое значение: так Dart продолжает работать, а не падает.
+StdValue BenignValueFor(const std::string& method) {
+  if (method == "getCurrentPosition" || method == "getDuration") {
+    return StdValue::Int(0);
+  }
+  return StdValue::Null();
+}
+
 // Отправляет событие игрока в его поток. Формат - словарь с полями
 // event/value, как ждёт Dart (audioplayers_platform.dart:242-265).
 void SendStreamEvent(FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -258,8 +288,14 @@ bool flutter_libnx_audioplayers_handle(
     voice = VoiceOf(player);
   }
   if (voice < 0) {
-    RespondError(engine, message, "unknown_player",
-                 "kein create fuer " + player);
+    // Игрок, которому забрали голос, в Dart остаётся живым и продолжает
+    // опрашивать позицию раз в 200 мс. Исключение на каждый такой опрос
+    // давало лавину: за прогон набежало больше 11000 PlatformException и
+    // 7 МБ лога.
+    //
+    // Поэтому неизвестному игроку отвечаем безобидно, а не отказом: звука
+    // у него больше нет, но и вреда никому.
+    Respond(engine, message, BenignValueFor(method));
     return true;
   }
 

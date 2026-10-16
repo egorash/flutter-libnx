@@ -58,6 +58,10 @@ void flutter_libnx_audio_release_source(int id);
 long flutter_libnx_audio_position_ms(int id);
 long flutter_libnx_audio_duration_ms(int id);
 
+// Голос свободен (доиграл, остановлен или закрыт) и его можно отдать
+// другому игроку. Нужен для перераспределения при нехватке голосов.
+bool flutter_libnx_audio_voice_idle(int id);
+
 // Забирает накопленное аудио-потоком событие. Вызывать из главного цикла на
 // платформенном потоке: в Dart события уходят через EventChannel, а тот
 // требует именно этого потока. prepared = audio.onPrepared,
