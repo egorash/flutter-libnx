@@ -88,6 +88,11 @@ extern "C" bool flutter_libnx_audio_init(std::string* error);
 extern "C" void flutter_libnx_audioplayers_pump(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
+// Gamelogik des Portes (gamepad_horizon.cpp, gamepads_horizon.cpp).
+extern "C" bool flutter_libnx_gamepad_init(std::string* error);
+extern "C" void flutter_libnx_gamepads_pump(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
 namespace {
 
 constexpr const char* kHostIp = "192.168.0.153";
@@ -1007,6 +1012,16 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  // Gamelogik: eigener Abfragepfad bei 60 Hz, davon aus nur die
+  // Veraenderungen. Faellt er aus, laeuft die App weiter - dann eben ohne
+  // Pad.
+  {
+    std::string pad_error;
+    if (!flutter_libnx_gamepad_init(&pad_error)) {
+      LOG_WARN("Gamepad nicht verfuegbar: %s", pad_error.c_str());
+    }
+  }
+
   LOG_INFO("FlutterEngineInitialize ...");
   FlutterEngineResult result = FlutterEngineInitialize(
       FLUTTER_ENGINE_VERSION, &renderer, &project, nullptr, &engine);
@@ -1139,6 +1154,10 @@ int main(int argc, char* argv[]) {
     // verlangt den Plattform-Thread. Ohne das wartet Dart 30 Sekunden auf
     // sein "audio.onPrepared".
     flutter_libnx_audioplayers_pump(engine);
+
+    // Veraenderte Tasten und Achsen des Gamelogs an Dart melden. Auch hier
+    // sammelt der Abfragepfad nur - senden darf man es von hier.
+    flutter_libnx_gamepads_pump(engine);
 
     if (!focus_sent && g_first_frame_presented && engine != nullptr) {
       FlutterViewFocusEvent focus = {};

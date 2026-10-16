@@ -1,9 +1,8 @@
 [flutter-libnx][INFO ] Logging bereit (stdout=0 nxlink=0 netz=0 datei=sdmc:/switch/flutter-libnx/romashka_game.log) (log.cpp:215)
 [flutter-libnx][INFO ] romashka_game startet (main.cpp:720)
-[flutter-libnx][INFO ] Erbschaftsbereinigung: 0x12a0edd000 +25824 KB bleibt (kein Spiegel gefunden - vermutlich der eigene Main-Stack) (thread_diag_horizon.cpp:259)
-[flutter-libnx][INFO ] Erbschaftsbereinigung: 0x12a8e36000 +1028 KB zurueckgebaut (Spiegel 0x7bff439000) (thread_diag_horizon.cpp:243)
-[flutter-libnx][INFO ] Erbschaftsbereinigung: 1 von 2 Erbstuecken zurueckgebaut (thread_diag_horizon.cpp:265)
-[flutter-libnx][INFO ] Heap-Probe: 0x12a0ebe000 bis 0x1363c00000 (3117 MB) (main.cpp:745)
+[flutter-libnx][INFO ] Erbschaftsbereinigung: 0x6fd06dd000 +25824 KB bleibt (kein Spiegel gefunden - vermutlich der eigene Main-Stack) (thread_diag_horizon.cpp:259)
+[flutter-libnx][INFO ] Erbschaftsbereinigung: 0 von 1 Erbstuecken zurueckgebaut (thread_diag_horizon.cpp:265)
+[flutter-libnx][INFO ] Heap-Probe: 0x6fd06be000 bis 0x7093400000 (3117 MB) (main.cpp:745)
 [flutter-libnx][INFO ] Heap-Probe: bis 256 MB am Stueck nutzbar (main.cpp:767)
 [flutter-libnx][WARN ] Heap-Scan[Start]: 3 Regionen, 1 abweichend (25824 KB) (thread_diag_horizon.cpp:148)
 [flutter-libnx][INFO ] romfs bereit (main.cpp:816)
@@ -36,26 +35,16 @@
 [flutter-libnx][INFO ] Locale ru an Engine gemeldet = 0 (kSuccess) (main.cpp:1091)
 [flutter-libnx][INFO ] Schrift 5: 180236 Bytes, Signatur 00 01 00 00 (fonts_horizon.cpp:99)
 [flutter-libnx][INFO ] Hauptschleife laeuft, Plus beendet (main.cpp:1117)
-[flutter-libnx][WARN ] flutter/isolate: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
-[flutter-libnx][WARN ] flutter/keyboard: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
-[flutter-libnx][WARN ] flutter/platform: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
-[flutter-libnx][WARN ] flutter/navigation: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
+[flutter-libnx][WARN ] flutter/isolate: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:909)
+[flutter-libnx][WARN ] flutter/keyboard: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:909)
+[flutter-libnx][WARN ] flutter/platform: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:909)
+[flutter-libnx][WARN ] flutter/navigation: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:909)
 [flutter-libnx][INFO ] View-Fokus nach erstem Frame = 0 (kSuccess) (main.cpp:1155)
-[flutter-libnx][WARN ] xyz.luan/audioplayers.global/events: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
-[flutter-libnx][WARN ] xyz.luan/audioplayers.global: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
-[flutter-libnx][INFO ] [engine:flutter] MissingPluginException(No implementation found for method listen on channel xyz.luan/audioplayers.global/events) (main.cpp:184)
-[flutter-libnx][INFO ] [engine:flutter] #0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364) (main.cpp:184)
-[flutter-libnx][INFO ] [engine:flutter] <asynchronous suspension> (main.cpp:184)
-[flutter-libnx][INFO ] [engine:flutter] #1      EventChannel.receiveBroadcastStream.<anonymous closure> (package:flutter/src/services/platform_channel.dart:711) (main.cpp:184)
-[flutter-libnx][INFO ] [engine:flutter] <asynchronous suspension> (main.cpp:184)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][WARN ] xyz.luan/gamepads: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:899)
+[flutter-libnx][INFO ] audioplayers.global: init (audioplayers_horizon.cpp:399)
+[flutter-libnx][INFO ] audioplayers: Player e3fd1f95-696a-4abd-ae58-7e2404201304 -> Stimme 0 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/music_theme.mp3, 44100 Hz, 1 Kanal, ~21000 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player 426d3cda-3e26-4dbc-bd5c-8cf7cc172c79 -> Stimme 1 (audioplayers_horizon.cpp:204)
+[flutter-libnx][WARN ] xyz.luan/gamepads: unbekannter Kanal -> MissingPluginException (plugins_horizon.cpp:909)
 [flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method listGamepads on channel xyz.luan/gamepads)
 #0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
 <asynchronous suspension>
@@ -63,160 +52,30 @@
 <asynchronous suspension>
 #2      InputController._scanConnectedPads (package:romashka_game/controllers/input_controller.dart:310)
 <asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
-[flutter-libnx][INFO ] [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method init on channel xyz.luan/audioplayers.global)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364)
-<asynchronous suspension>
-#1      GlobalAudioScope.ensureInitialized (package:audioplayers/src/global_audio_scope.dart:39)
-<asynchronous suspension>
-#2      AudioPlayer._create (package:audioplayers/src/audioplayer.dart:178)
-<asynchronous suspension> (dart-vm:0)
+[flutter-libnx][INFO ] audioplayers: Player f18a0c76-a95f-4099-966d-940c28f6f003 -> Stimme 2 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/menu_click.mp3, 44100 Hz, 1 Kanal, ~50 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/music_theme.mp3, 44100 Hz, 1 Kanal, ~21000 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/land.mp3, 44100 Hz, 1 Kanal, ~90 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/music_theme.mp3, 44100 Hz, 1 Kanal, ~21000 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/music_theme.mp3, 44100 Hz, 1 Kanal, ~21000 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player c3b9139a-943b-437b-b116-6028ff2e770d -> Stimme 3 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/jump.mp3, 44100 Hz, 1 Kanal, ~130 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player ffd46438-9e29-4ac3-8e3b-a6c67070d305 -> Stimme 4 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/land.mp3, 44100 Hz, 1 Kanal, ~90 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player d2921833-f998-4a43-accb-5d0d84f47eba -> Stimme 5 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] audioplayers: Player 333a9bab-8941-4484-a70a-3fab485d4c0e -> Stimme 6 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/jump.mp3, 44100 Hz, 1 Kanal, ~130 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/coin.mp3, 44100 Hz, 1 Kanal, ~220 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player 19d38f33-d58c-4f62-98eb-98232dc3cf7a -> Stimme 7 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/stomp.mp3, 44100 Hz, 1 Kanal, ~220 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player f56a0422-fcdb-4a48-a374-9c85f69adcbf -> Stimme 8 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/land.mp3, 44100 Hz, 1 Kanal, ~90 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player 7008d5d2-ceac-4bb1-b3ab-0617cebf6f1f -> Stimme 9 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] audioplayers: Player 9e33a61f-34cd-4b07-8a53-205d11f9f46a -> Stimme 10 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/jump.mp3, 44100 Hz, 1 Kanal, ~130 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/coin.mp3, 44100 Hz, 1 Kanal, ~220 ms (audio_horizon.cpp:415)
+[flutter-libnx][INFO ] audioplayers: Player 559c00d7-cd12-4475-a87f-48e4106f9f1d -> Stimme 11 (audioplayers_horizon.cpp:204)
+[flutter-libnx][INFO ] Audio: Quelle /switch/flutter_apps/romashka_game/tmp/b1a5be47-07c5-446c-846b-efcdfee5059f/land.mp3, 44100 Hz, 1 Kanal, ~90 ms (audio_horizon.cpp:415)
 [flutter-libnx][INFO ] Shutdown ... (main.cpp:1164)
 [flutter-libnx][INFO ] FlutterEngineShutdown zurueckgekehrt (main.cpp:1168)
 [flutter-libnx][INFO ] romashka_game beendet (main.cpp:1198)

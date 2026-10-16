@@ -61,6 +61,12 @@ extern "C" bool flutter_libnx_audioplayers_global_handle(
 extern "C" void flutter_libnx_audioplayers_pump(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
+extern "C" bool flutter_libnx_gamepads_handle(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessage* message,
+    const std::string& method,
+    const flutter_libnx::StdValue& args);
+
 namespace flutter_libnx {
 
 namespace {
@@ -893,6 +899,9 @@ ChannelRegistry MakeRegistry() {
   // Start ab (er ruft init() und abonniert den Ereignisstrom).
   r.method["xyz.luan/audioplayers.global"] =
       flutter_libnx_audioplayers_global_handle;
+  // Gamelogik: ohne diesen Kanal wirft listGamepads in InputController eine
+  // unbehandelte MissingPluginException.
+  r.method["xyz.luan/gamepads"] = flutter_libnx_gamepads_handle;
   return r;
 }
 

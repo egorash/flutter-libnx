@@ -60,6 +60,11 @@ bool DecodeStdMethodCall(const uint8_t* data,
                          std::string* method,
                          StdValue* args);
 
+// Обратное кодирование для вызовов, которые embedder шлет в Dart (например
+// onGamepadEvent): Dart ждет ровно такой конверт.
+std::vector<uint8_t> EncodeStdMethodCall(const std::string& method,
+                                         const StdValue& args);
+
 // Antwort-Umschläge.
 std::vector<uint8_t> EncodeStdSuccess(const StdValue& result);
 std::vector<uint8_t> EncodeStdError(const std::string& code,

@@ -295,6 +295,15 @@ bool DecodeStdMethodCall(const uint8_t* data,
   return true;
 }
 
+std::vector<uint8_t> EncodeStdMethodCall(const std::string& method,
+                                         const StdValue& args) {
+  // Зеркало DecodeStdMethodCall: сначала имя, затем аргументы.
+  std::vector<uint8_t> out;
+  EncodeStdValue(StdValue::String(method), &out);
+  EncodeStdValue(args, &out);
+  return out;
+}
+
 std::vector<uint8_t> EncodeStdSuccess(const StdValue& result) {
   std::vector<uint8_t> out;
   out.push_back(0);
