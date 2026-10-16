@@ -58,6 +58,19 @@ constexpr int kOutputChannels = 2;
 // Игра держит до 31 плеера одновременно (audio_service.dart: сумма пулов 30
 // плюс bgm), плюс запас на загрузку файла до воспроизведения.
 constexpr int kMaxVoices = 32;
+// Трассировка микшера. По умолчанию выключена: она нужна ровно тогда,
+// когда звук не слышен, и больше только засоряет протокол. Включается при
+// сборке: make CFLAGS_EXTRA+=-DFLUTTER_LIBNX_AUDIO_TRACE=1
+//
+// Не выбрасывать совсем нельзя - именно эти строки показали, что при
+// fehlender Senke der Dienst null Abtastwerte ausgibt, obwohl die Daten
+// ankommen, und dass das Reseampeln 8,1 % verliert.
+#ifdef FLUTTER_LIBNX_AUDIO_TRACE
+constexpr bool kTrace = true;
+#else
+constexpr bool kTrace = false;
+#endif
+
 constexpr int kSlotsPerVoice = 4;
 constexpr int kSrcRate = 44100;
 // Кадр рендерера при 48 кГц - AUDREN_SAMPLES_PER_FRAME_48KHZ отсчётов, и
@@ -376,7 +389,7 @@ class AudioEngine {
     u64 next_drops_report = 0;
     while (!stop_.load()) {
       audrenWaitFrame();
-      const u64 now = flutter_libnx::TickNow();
+      [[maybe_unused]] const u64 now = flutter_libnx::TickNow();
 
       DrainCommands();
 
@@ -411,34 +424,35 @@ class AudioEngine {
         break;
       }
 
-      // Drops zaehlen: sagen sie, ob der Dienst unsere Puffer nicht annimmt.
-      if (now >= next_drops_report) {
-        next_drops_report = now + flutter_libnx::UsToTick(1000000);
-        for (int i = 0; i < kMaxVoices; ++i) {
-          Voice& voice = voices_[i];
-          if (!voice.used || !voice.open || voice.finished) {
-            continue;
-          }
-          // Ключевая величина: сколько отсчётов сервис отдал на выход.
-          // Пока она растёт вместе с нашими отсчётами, звук идёт; если она
-          // стоит, а наши отсчёты растут - данные до сервиса не доходят.
-          const u32 played = audrvVoiceGetPlayedSampleCount(&driver_, i);
-          const u32 drops = audrvVoiceGetVoiceDropsCount(&driver_, i);
-          if (!voice.reported || played != voice.last_played) {
-            voice.reported = true;
-            voice.last_played = played;
-            char states[kSlotsPerVoice * 3 + 1] = {};
-            for (int s = 0; s < kSlotsPerVoice; ++s) {
-              char one[4] = {};
-              std::snprintf(one, sizeof(one), "%d,",
-                            static_cast<int>(voice.slots[s].state));
-              std::strncat(states, one,
-                           sizeof(states) - std::strlen(states) - 1);
+      // Wie viele Abtastwerte der Dienst wirklich ausgegeben hat. Ohne
+      // diese Zeile ist "kein Ton" von "Daten kommen an" nicht zu
+      // unterscheiden - genau diese Verwechslung hat fuenf Runden gekostet.
+      if constexpr (kTrace) {
+        if (now >= next_drops_report) {
+          next_drops_report = now + flutter_libnx::UsToTick(1000000);
+          for (int i = 0; i < kMaxVoices; ++i) {
+            Voice& voice = voices_[i];
+            if (!voice.used || !voice.open || voice.finished) {
+              continue;
             }
-            LOG_INFO("Audio: Stimme %d - unsere %lld, abgespielt %u, "
-                     "verworfen %u, Puffer %s",
-                     i, static_cast<long long>(voice.out_samples), played,
-                     drops, states);
+            const u32 played = audrvVoiceGetPlayedSampleCount(&driver_, i);
+            const u32 drops = audrvVoiceGetVoiceDropsCount(&driver_, i);
+            if (!voice.reported || played != voice.last_played) {
+              voice.reported = true;
+              voice.last_played = played;
+              char states[kSlotsPerVoice * 3 + 1] = {};
+              for (int s = 0; s < kSlotsPerVoice; ++s) {
+                char one[4] = {};
+                std::snprintf(one, sizeof(one), "%d,",
+                              static_cast<int>(voice.slots[s].state));
+                std::strncat(states, one,
+                             sizeof(states) - std::strlen(states) - 1);
+              }
+              LOG_INFO("Audio: Stimme %d - unsere %lld, abgespielt %u, "
+                       "verworfen %u, Puffer %s",
+                       i, static_cast<long long>(voice.out_samples), played,
+                       drops, states);
+            }
           }
         }
       }
@@ -617,20 +631,22 @@ class AudioEngine {
                      static_cast<size_t>(written) * voice.channels *
                          sizeof(int16_t));
       voice.out_samples += written;
-      if (voice.log_slots < 3) {
-        voice.log_slots++;
-        // Размах данных в слоте. Ноль означал бы, что виноват декодер или
-        // ресемплинг; ненулевое значение при полной тишине означало бы, что
-        // данные на месте, а теряются они уже на выходе.
-        int peak = 0;
-        for (int i = 0; i < written; ++i) {
-          const int magnitude = dst[i] < 0 ? -dst[i] : dst[i];
-          if (magnitude > peak) {
-            peak = magnitude;
+      if constexpr (kTrace) {
+        if (voice.log_slots < 3) {
+          voice.log_slots++;
+          // Размах данных в слоте. Ноль означал бы, что виноват декодер или
+          // ресемплинг; ненулевое значение при полной тишине означало бы, что
+          // данные на месте, а теряются они уже на выходе.
+          int peak = 0;
+          for (int i = 0; i < written; ++i) {
+            const int magnitude = dst[i] < 0 ? -dst[i] : dst[i];
+            if (magnitude > peak) {
+              peak = magnitude;
+            }
           }
+          LOG_INFO("Audio: Stimme %d -> %d Abtastwerte in Slot %d (Spitze %d)",
+                   id, written, s, peak);
         }
-        LOG_INFO("Audio: Stimme %d -> %d Abtastwerte in Slot %d (Spitze %d)", id,
-                 written, s, peak);
       }
       buf.start_sample_offset = s * kSlotOutSamples;
       buf.end_sample_offset = buf.start_sample_offset + written;

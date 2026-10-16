@@ -562,6 +562,7 @@ bool flutter_libnx_audioplayers_global_handle(
     const std::string& method,
     const flutter_libnx::StdValue& args) {
   using namespace flutter_libnx;
+  (void)args;   // Der globale Kanal nimmt nichts entgegen - alles antwortet mit Erfolg
   LOG_INFO("audioplayers.global: %s", method.c_str());
   Respond(engine, message, StdValue::Null());
   return true;

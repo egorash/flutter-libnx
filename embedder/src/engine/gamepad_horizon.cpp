@@ -38,7 +38,6 @@ constexpr int kDpadMax = 32767;
 // фактически выходило 16'666'666 / 19'200'000 = 0,868 секунды между опросами
 // вместо 1/60. Кнопка, нажатая короче окна, просто терялась - отсюда
 // «работает только кнопочный шторм» и «надо подгадывать момент».
-constexpr int kPollPeriodMs = 1000 / kPollHz;
 const u64 kPollPeriodTicks = flutter_libnx::UsToTick(1000000 / kPollHz);
 
 // Таблица кнопок libnx -> ключ LinuxMapping (controller_database.dart:141).
@@ -106,6 +105,7 @@ class Gamepad {
   }
 
   bool Initialize(std::string* error) {
+    (void)error;   // Fehlerpfad gibt es hier nicht; Signatur ist Teil des Aufrufs
     if (running_.load()) {
       return true;
     }
